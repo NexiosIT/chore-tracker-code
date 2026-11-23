@@ -42,3 +42,20 @@ jobs:
       - uses: gradle/actions/setup-gradle@v5
       - name: Build and test
         run: ./gradlew build
+
+  app:
+    name: app (analyze + test)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v5
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: 3.50.1
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter test
