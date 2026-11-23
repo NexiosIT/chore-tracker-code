@@ -5,7 +5,7 @@ Code for Chore Tracker. Specs live in the product hub, [NexiosIT/chore-tracker](
 | Folder | Service | Stack |
 |--------|---------|-------|
 | `backend/` | `chore-tracker-api` | Kotlin, Spring Boot 4.0, PostgreSQL (JPA, Flyway), Java 21 |
-| `app/` | `chore-tracker-app` | Flutter (Android 10+, `minSdk` 29) |
+| `app/` | `chore-tracker-app` | Flutter 3.50 (Android 10+, `minSdk` 29) |
 
 ## Backend
 
@@ -15,3 +15,12 @@ cd backend
 ```
 
 Tests need a PostgreSQL database; set `SPRING_DATASOURCE_URL`, `SPRING_DATASOURCE_USERNAME` and `SPRING_DATASOURCE_PASSWORD`.
+
+## App
+
+```bash
+cd app
+flutter pub get
+flutter analyze
+flutter test
+```
