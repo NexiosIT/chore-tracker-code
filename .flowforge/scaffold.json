@@ -1,0 +1,23 @@
+{
+  "cli_version": "1.7.0",
+  "synced_at": "2026-11-23T11:26:08.225Z",
+  "managed_targets": [
+    ".github/workflows",
+    "docs",
+    ".claude/commands/ie",
+    ".claude/agents",
+    ".claude/ie/generate",
+    ".githooks"
+  ],
+  "files": {
+    ".github/workflows/quality-gates.yml": "4799b4240139b36c6f2f3f1b046130ebc9502018dfaccc65d62699b5033740d9",
+    "docs/WORKFLOW.md": "f7fd3ecb0147b4dbfb8fe50815755efff560a308362884478812761f2fae19a2",
+    ".claude/commands/ie/apply-improvement.md": "825345a9d554f568e67a69e269b5aba062cd77e147ee7e2ab5a3b978a965551b",
+    ".claude/commands/ie/bug-report.md": "12042fc7dba6b67adde000241c39718623bba72cfc770e51afe94ce4a8d43d89",
+    ".claude/commands/ie/generate.md": "519b2fbd35a73428598dc1ae9527efdd85b8d5dfb8a13a79604b37b3fc1042fe",
+    ".claude/agents/review-checkpoint.md": "907adff1b3b9590b3ac08706a42b9754004187ba41282cb476fea019fd77153d",
+    ".claude/ie/generate/finalize.md": "bebaf4bdd84574673ad188e1205b44b482f7b7b2beb105f57748129039689eaf",
+    ".claude/ie/generate/presentation.md": "82330082ff8071e1446e2e94efc285c2a030f42441fdc2ea5665e2b897017391",
+    ".githooks/pre-push": "a587a688cd6a328f201e99767d2201e494d82fccf663cee59d4c19681cdfa82b"
+  }
+}

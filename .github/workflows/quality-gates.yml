@@ -1,0 +1,1057 @@
+# =============================================================================
+# Quality Gates — Intent Engineering spec + standards gates
+# =============================================================================
+# This workflow checks only what needs the product-hub: that the code in this PR
+# still matches the specs it was generated from. It runs no build, no tests, no
+# linter and no security scanner.
+#
+# Those belong to this repo, in this repo's own workflow. Intent Engineering
+# ships no build/test CI and never invokes your npm scripts — it cannot know
+# your stack, your test runner, or what your suites need in order to run.
+# Author your own workflow (a `ci.yml` alongside this file) and make
+# its checks required on the integration branch: branch protection — not this
+# workflow — is what guarantees the code builds and its tests pass before a
+# merge. See code-repo WORKFLOW.md → "Your own build and test CI".
+#
+# Jobs:
+#   spec-compliance       (blocking)     spec drift, Gherkin coverage, contract
+#                                        operation coverage (STD-024). Contract
+#                                        structural lint is the hub's job, not this
+#                                        repo's — see the note on that job.
+# standards-compliance (non-blocking) unindexed-pattern alerts
+#   compliance-report     (always)       PR comment (spec gates + finalize state)
+#
+# CI configuration (setup steps: code-repo WORKFLOW.md → "CI configuration"):
+#   PRODUCT_HUB_TOKEN     (secret)   — read the product-hub (spec drift, Gherkin coverage,
+#                                      standards scan). Classic PAT, repo scope.
+#   IE_CLI_PACKAGES_TOKEN (secret)   — install @rp-flow/ie-cli for spec-drift (cross-org).
+#                                      Classic PAT, read:packages. Falls back to GITHUB_TOKEN same-org.
+#   PRODUCT_HUB_REPO      (variable) — hub owner/name for legacy manifests with no
+#                                      product_hub_remote. Falls back to {owner}/product-hub.
+#   SPEC_DRIFT_BLOCKING   (variable) — set true to fail on spec drift (default: warn-only).
+#   FINALIZE_BLOCKING     (variable) — set true to fail a feature PR that still carries
+#                                      .flowforge/manifest.yml at the root, i.e. one where
+#                                      `ie generation finalize` has not run (default: warn-only).
+#
+# Design notes:
+#   - standards-compliance is advisory here, never a block.
+#   - Pipeline state is git-native; GitHub Actions is only the runner.
+#   - The lifecycle has explicit producers: delivery is `ie feature deliver`,
+#     not a CI event.
+#   - Generic build/test/security CI belongs to the project, not to IE.
+# =============================================================================
+
+name: Quality Gates
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  PRODUCT_HUB_REPO: ${{ vars.PRODUCT_HUB_REPO || format('{0}/product-hub', github.repository_owner) }}
+
+jobs:
+  # ===========================================================================
+  # Detect — manifest locator + the one stack fact the gates below need
+  # ===========================================================================
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      tech_stack: ${{ steps.detect.outputs.tech_stack }}
+      feature_id: ${{ steps.detect.outputs.feature_id }}
+      manifest_path: ${{ steps.detect.outputs.manifest_path }}
+      hub_slug: ${{ steps.detect.outputs.hub_slug }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Detect tech stack and metadata
+        id: detect
+        shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_REF: ${{ github.head_ref }}
+        run: |
+          # Tech stack detection. Build files beat package.json, so a Gradle
+          # service with a stray package.json still resolves as Java. Exactly
+          # two consumers, both below: the Gherkin coverage search directory
+          # and the standards pattern scan. No build tool is derived — nothing
+          # in this workflow builds anything. A Gradle repo once
+          # fell through to "unknown" and both consumers silently skipped.
+          # BEGIN IE STACK DETECTION (exercised by quality-gates-stack-detection.test.ts)
+          if [ -f "pom.xml" ] || [ -f "build.gradle" ] || [ -f "build.gradle.kts" ]; then
+            echo "tech_stack=java" >> "$GITHUB_OUTPUT"
+          elif [ -f "package.json" ]; then
+            echo "tech_stack=node" >> "$GITHUB_OUTPUT"
+          else
+            echo "tech_stack=unknown" >> "$GITHUB_OUTPUT"
+          fi
+          # END IE STACK DETECTION
+
+          # Active feature work keeps its manifest at the root. Finalize moves
+          # it into a feature-specific archive before the PR opens, so resolve
+          # the one archive manifest added or modified by this PR. Historical
+          # archives already on the base branch are deliberately ignored.
+          # BEGIN IE MANIFEST RESOLUTION (exercised by quality-gates-manifest-resolution.test.ts)
+          ACTIVE_MANIFEST=".flowforge/manifest.yml"
+          MANIFEST=""
+          if [ -f "$ACTIVE_MANIFEST" ]; then
+            MANIFEST="$ACTIVE_MANIFEST"
+          else
+            # Any id prefix, and both artifact kinds: the archive directory is
+            # named after the artifact id, whose feature prefix is configurable
+            # and whose fix spelling is `FIX-NNN` (items
+            # 12/18). This glob is not rendered, so anything narrower leaves some
+            # finalized PR with no manifest resolved — every manifest-bound check
+            # then silently no-ops on green CI, which is the failure
+            # recorded. Nothing but id-named archive directories lives here, so
+            # `*` is precise.
+            ARCHIVE_CANDIDATES=$(git diff --name-only --diff-filter=AM "$PR_BASE_SHA...HEAD" -- '.flowforge/archive/*/manifest.yml')
+            ARCHIVE_COUNT=0
+            ARCHIVE_MANIFEST=""
+            while IFS= read -r CANDIDATE; do
+              [ -z "$CANDIDATE" ] && continue
+              ARCHIVE_COUNT=$((ARCHIVE_COUNT + 1))
+              ARCHIVE_MANIFEST="$CANDIDATE"
+            done <<EOF
+          $ARCHIVE_CANDIDATES
+          EOF
+
+            if [ "$ARCHIVE_COUNT" -eq 1 ]; then
+              MANIFEST="$ARCHIVE_MANIFEST"
+            elif [ "$ARCHIVE_COUNT" -gt 1 ]; then
+              echo "::error::Ambiguous Flowforge PR: found $ARCHIVE_COUNT changed archive manifests. Expected exactly one finalized feature archive."
+              echo "$ARCHIVE_CANDIDATES"
+              exit 1
+            # All three artifact kinds, as three independent patterns rather than
+            # one alternation: each is rendered to its hub's own prefix separately
+            # (the feature, fix and improvement prefixes are configured
+            # independently), and a single fused literal could not be. A PR on any
+            # of the three that fell through this guard would leave every
+            # manifest-bound check silently no-op on green CI —
+            # the exact failure this guard was written from.
+            elif echo "$PR_HEAD_REF" | grep -Eq '^feature/FT-[0-9]+(-|$)' \
+              || echo "$PR_HEAD_REF" | grep -Eq '^fix/FIX-[0-9]+(-|$)' \
+              || echo "$PR_HEAD_REF" | grep -Eq '^imp/IMP-[0-9]+(-|$)'; then
+              echo "::error::Flowforge PR '$PR_HEAD_REF' has neither an active manifest nor a changed finalized archive manifest."
+              exit 1
+            fi
+          fi
+          echo "manifest_path=$MANIFEST" >> "$GITHUB_OUTPUT"
+          # END IE MANIFEST RESOLUTION
+
+          # Parse the resolved v2 manifest for feature id + the product-hub locator.
+          # hub_slug (owner/name) is derived from product_hub_remote so renamed
+          # and cross-org hubs resolve correctly; it is shared with
+          # every job that needs the hub (spec-compliance checkout, standards
+          # checkout, QA evidence). Falls back to the PRODUCT_HUB_REPO
+          # convention var for legacy manifests with no remote.
+          HUB_SLUG=""
+          if [ -f "$MANIFEST" ]; then
+            FEATURE_ID=$(grep -A3 '^feature:' "$MANIFEST" | grep -E '^[[:space:]]+id:' | head -1 | sed -E 's/.*id:[[:space:]]*"?([^"]*)"?[[:space:]]*$/\1/')
+            REMOTE=$(grep -E '^product_hub_remote:' "$MANIFEST" | head -1 | sed -E 's/^product_hub_remote:[[:space:]]*"?([^"]*)"?[[:space:]]*$/\1/')
+            HUB_SLUG=$(echo "$REMOTE" | sed -E 's#^(git@[^:]+:|https?://[^/]+/|ssh://git@[^/]+/)##; s#\.git$##')
+            # Both values are parsed from PR-controlled manifest content. Constrain
+            # them to a safe charset at the source so no downstream consumer (run:
+            # via env:, checkout with:, gh api) ever sees shell metacharacters.
+            if [ -n "$FEATURE_ID" ] && ! echo "$FEATURE_ID" | grep -Eq '^[A-Za-z0-9._-]+$'; then
+              echo "::warning::Manifest feature id has an unexpected format — using 'unknown'."
+              FEATURE_ID=""
+            fi
+            if [ -n "$HUB_SLUG" ] && ! echo "$HUB_SLUG" | grep -Eq '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$'; then
+              echo "::warning::Manifest product_hub_remote does not resolve to an owner/repo slug — falling back to PRODUCT_HUB_REPO."
+              HUB_SLUG=""
+            fi
+            echo "feature_id=${FEATURE_ID:-unknown}" >> $GITHUB_OUTPUT
+          else
+            echo "feature_id=unknown" >> $GITHUB_OUTPUT
+          fi
+          echo "hub_slug=${HUB_SLUG:-$PRODUCT_HUB_REPO}" >> $GITHUB_OUTPUT
+
+      # Detect outputs are derived from PR-controlled content (manifest, repo
+      # files). Every run:/github-script consumer below takes them through
+      # step-level env: — never raw ${{ }} interpolation into script text
+      # (GitHub Actions script-injection hardening). Enforced by
+      # workflow-script-injection.test.ts.
+      - name: Log detection results
+        env:
+          TECH_STACK: ${{ steps.detect.outputs.tech_stack }}
+          FEATURE_ID: ${{ steps.detect.outputs.feature_id }}
+          MANIFEST_PATH: ${{ steps.detect.outputs.manifest_path }}
+        run: |
+          echo "Tech stack: $TECH_STACK"
+          echo "Feature ID: $FEATURE_ID"
+          echo "Manifest: ${MANIFEST_PATH:-none}"
+
+  # ===========================================================================
+  # Spec Compliance (blocking)
+  # ===========================================================================
+  spec-compliance:
+    runs-on: ubuntu-latest
+    needs: [detect]
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      # Hub repo resolved from the manifest's product_hub_remote (computed once
+      # in the detect job) so renamed/cross-org hubs work without a
+      # per-repo PRODUCT_HUB_REPO variable.
+      - name: Checkout product-hub
+        id: checkout-hub
+        continue-on-error: true
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ needs.detect.outputs.hub_slug }}
+          token: ${{ secrets.PRODUCT_HUB_TOKEN || github.token }}
+          path: .product-hub
+          sparse-checkout: |
+            specs
+            standards
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@rp-flow'
+          package-manager-cache: false   # only npm-installs ie-cli; no deps to cache (v5 auto-cache breaks on pnpm hubs)
+
+      # Install only for the spec-drift step below. continue-on-error so a
+      # missing package token (cross-org / GITHUB_TOKEN without package:read)
+      # degrades drift detection to a skip — it must never take down the
+      # pre-existing Gherkin/contract gates in this job. Set an org secret
+      # IE_CLI_PACKAGES_TOKEN (Packages: read) to enable drift detection.
+      - name: Install ie CLI (for spec-drift)
+        id: install_ie
+        continue-on-error: true
+        run: npm install -g @rp-flow/ie-cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.IE_CLI_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+
+      # Spec-drift detection: recompute each manifest spec's hash
+      # from the product-hub checkout and compare to the pinned spec_hash.
+      # Warn-only by default ("warnings, not blocks"); set repo/org
+      # variable SPEC_DRIFT_BLOCKING=true to fail the job on drift.
+      - name: Spec-drift detection
+        id: spec_drift
+        env:
+          HUB_SLUG: ${{ needs.detect.outputs.hub_slug }}
+          BLOCKING: ${{ vars.SPEC_DRIFT_BLOCKING }}
+          MANIFEST: ${{ needs.detect.outputs.manifest_path }}
+        run: |
+          if ! command -v ie >/dev/null 2>&1; then
+            echo "::warning::ie CLI unavailable (package token not configured?) — skipping spec-drift detection. Set IE_CLI_PACKAGES_TOKEN to enable."
+            exit 0
+          fi
+          if [ ! -f "$MANIFEST" ]; then
+            echo "No manifest — skipping spec-drift detection"
+            exit 0
+          fi
+          if [ ! -d ".product-hub" ]; then
+            echo "::warning::product-hub checkout failed for '$HUB_SLUG' (checkout outcome: ${{ steps.checkout-hub.outcome }}) — set PRODUCT_HUB_TOKEN or confirm it can read that repo. Skipping spec-drift detection."
+            exit 0
+          fi
+          set +e
+          ie manifest verify --manifest "$MANIFEST" --hub .product-hub --json > drift.json 2> drift.err
+          CODE=$?
+          set -e
+          cat drift.json
+          # Classify the result in node so a verify *error/crash* is never
+          # misreported as spec *drift*. Exit code drives the gate: only real
+          # drift under SPEC_DRIFT_BLOCKING=true fails the job.
+          VERIFY_CODE="$CODE" node -e '
+            const fs = require("fs");
+            let r = null;
+            try { r = JSON.parse(fs.readFileSync("drift.json", "utf8")); } catch (e) {}
+            if (!r || typeof r !== "object") {
+              const err = fs.existsSync("drift.err") ? fs.readFileSync("drift.err", "utf8").trim() : "";
+              console.log(`::warning::spec-drift verify produced no result (exit ${process.env.VERIFY_CODE}); skipping. ${err}`.trim());
+              process.exit(0);
+            }
+            const specs = (r.data && Array.isArray(r.data.specs)) ? r.data.specs : [];
+            const bad = specs.filter(s => s.status !== "ok");
+            if (r.success) { console.log("No spec drift."); process.exit(0); }
+            if (bad.length === 0) {
+              console.log(`::warning::spec-drift verify could not run: ${r.error || "unknown error"} (not treated as drift)`);
+              process.exit(0);
+            }
+            for (const s of bad) {
+              console.log(`::warning file=${s.path}::${s.id} ${s.status} — remedy: ${s.remedy || "ie feature handover --refresh"}`);
+            }
+            if (process.env.BLOCKING === "true") {
+              console.log("::error::Spec drift detected and SPEC_DRIFT_BLOCKING=true — failing the job.");
+              process.exit(1);
+            }
+            console.log("::warning::Spec drift detected (non-blocking). Set repository/org variable SPEC_DRIFT_BLOCKING=true to enforce.");
+            process.exit(0);
+          '
+
+      - name: Gherkin scenario coverage
+        id: gherkin
+        env:
+          HUB_SLUG: ${{ needs.detect.outputs.hub_slug }}
+          TECH: ${{ needs.detect.outputs.tech_stack }}
+          MANIFEST: ${{ needs.detect.outputs.manifest_path }}
+        run: |
+          if [ ! -f "$MANIFEST" ]; then
+            echo "No manifest found — skipping Gherkin coverage check"
+            exit 0
+          fi
+
+          if [ ! -d ".product-hub" ]; then
+            echo "::warning::product-hub checkout failed for '$HUB_SLUG' (checkout outcome: ${{ steps.checkout-hub.outcome }}) — set PRODUCT_HUB_TOKEN or confirm it can read that repo. Skipping Gherkin coverage."
+            exit 0
+          fi
+
+          # Extract scenario file paths from manifest
+          SCENARIO_FILES=$(grep 'scenarios:' "$MANIFEST" | sed 's/.*scenarios: *"\{0,1\}\([^"]*\)"\{0,1\}/\1/' | tr -d ' ')
+
+          TOTAL_SCENARIOS=0
+          COVERED_SCENARIOS=0
+          UNCOVERED=""
+
+          for SPEC_FILE in $SCENARIO_FILES; do
+            FEATURE_FILE=".product-hub/$SPEC_FILE"
+            if [ ! -f "$FEATURE_FILE" ]; then
+              echo "Warning: Scenario file not found: $SPEC_FILE"
+              continue
+            fi
+
+            # Extract scenario names from .feature files
+            SCENARIOS=$(grep -E '^\s*(Scenario|Scenario Outline):' "$FEATURE_FILE" | sed 's/.*: *//')
+
+            while IFS= read -r SCENARIO; do
+              [ -z "$SCENARIO" ] && continue
+              TOTAL_SCENARIOS=$((TOTAL_SCENARIOS + 1))
+
+              # Create search keywords from scenario name (split on spaces, take key words)
+              KEYWORDS=$(echo "$SCENARIO" | tr '[:upper:]' '[:lower:]' | tr ' ' '\n' | grep -v -E '^(a|an|the|is|are|when|then|given|and|with|for|to|of|in|on|at|by)$' | head -5)
+
+              FOUND=false
+              if [ "$TECH" = "java" ] || [ "$TECH" = "gradle" ]; then
+                SEARCH_DIR="src/test"
+              else
+                SEARCH_DIR="src"
+              fi
+
+              if [ -d "$SEARCH_DIR" ]; then
+                # Check if any keyword from the scenario appears in test files
+                for KW in $KEYWORDS; do
+                  if grep -r -i -l "$KW" "$SEARCH_DIR" --include="*.java" --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" --include="*.spec.*" --include="*Test*" --include="*test*" > /dev/null 2>&1; then
+                    FOUND=true
+                    break
+                  fi
+                done
+              fi
+
+              if [ "$FOUND" = true ]; then
+                COVERED_SCENARIOS=$((COVERED_SCENARIOS + 1))
+              else
+                UNCOVERED="$UNCOVERED\n  - $SCENARIO"
+              fi
+            done <<< "$SCENARIOS"
+          done
+
+          if [ "$TOTAL_SCENARIOS" -gt 0 ]; then
+            COVERAGE=$((COVERED_SCENARIOS * 100 / TOTAL_SCENARIOS))
+          else
+            COVERAGE=100
+          fi
+
+          echo "Gherkin Scenario Coverage: $COVERED_SCENARIOS / $TOTAL_SCENARIOS ($COVERAGE%)"
+          if [ -n "$UNCOVERED" ]; then
+            echo -e "Uncovered scenarios:$UNCOVERED"
+          fi
+
+          # Fail if coverage below threshold (default 70%)
+          THRESHOLD=${GHERKIN_COVERAGE_THRESHOLD:-70}
+          if [ "$COVERAGE" -lt "$THRESHOLD" ]; then
+            echo "::error::Gherkin scenario coverage ($COVERAGE%) is below threshold ($THRESHOLD%)"
+            exit 1
+          fi
+
+      # Contract *structural* validity (servers/license/path-params/etc.) is a
+      # property of the hub-owned specs, gated once in the hub on a
+      # fragment-aware ruleset (`ie spec lint` on spec PRs). A code repo consumes
+      # a frozen, registered contract and cannot remediate it, so linting it here
+      # only produced un-actionable failures. The code repo keeps the check that
+      # is actually its own: code-to-contract conformance (STD-024), below.
+
+      - name: Contract operation coverage (STD-024)
+        id: contract_coverage
+        env:
+          BLOCKING: ${{ vars.CONTRACT_COVERAGE_BLOCKING }}
+        run: |
+          if ! command -v ie >/dev/null 2>&1; then
+            echo "::warning::ie CLI unavailable — skipping contract operation coverage. Set IE_CLI_PACKAGES_TOKEN to enable."
+            exit 0
+          fi
+          set +e
+          ie contracts coverage --json > coverage.json 2> coverage.err
+          set -e
+          cat coverage.json 2>/dev/null || true
+          # Classify in node: coverage gaps warn by default, or fail when CONTRACT_COVERAGE_BLOCKING=true. A run error
+          # (no result) is a skip, never a false gap. /ie/generate already hard-gates
+          # this at generation time (STD-024); this is the CI backstop.
+          node -e '
+            const fs = require("fs");
+            let r = null;
+            try { r = JSON.parse(fs.readFileSync("coverage.json", "utf8")); } catch (e) {}
+            if (!r || typeof r !== "object") {
+              const err = fs.existsSync("coverage.err") ? fs.readFileSync("coverage.err", "utf8").trim() : "";
+              console.log(`::warning::contract coverage produced no result; skipping. ${err}`.trim());
+              process.exit(0);
+            }
+            if (r.success) { console.log("All owned contract operations have a passing conformance test."); process.exit(0); }
+            const unc = (r.data && Array.isArray(r.data.uncovered)) ? r.data.uncovered : [];
+            for (const u of unc) {
+              console.log(`::warning::contract operation lacks a passing conformance test: ${u.operation} (${u.uc}) — ${u.status === null ? "absent from the coverage table" : "status: " + u.status}`);
+            }
+            if (process.env.BLOCKING === "true") {
+              console.log("::error::Contract operations lack passing conformance tests and CONTRACT_COVERAGE_BLOCKING=true — failing the job.");
+              process.exit(1);
+            }
+            console.log("::warning::Contract operation coverage gaps (non-blocking). Set repository/org variable CONTRACT_COVERAGE_BLOCKING=true to enforce.");
+            process.exit(0);
+          '
+
+  # ===========================================================================
+  # Standards Compliance (non-blocking)
+  # ===========================================================================
+  standards-compliance:
+    runs-on: ubuntu-latest
+    needs: [detect]
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Checkout product-hub standards
+        id: checkout-hub-standards
+        continue-on-error: true
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ needs.detect.outputs.hub_slug }}
+          token: ${{ secrets.PRODUCT_HUB_TOKEN || github.token }}
+          path: .product-hub
+          sparse-checkout: |
+            standards
+          sparse-checkout-cone-mode: false
+
+      - name: Scan for unindexed patterns
+        id: scan
+        env:
+          TECH: ${{ needs.detect.outputs.tech_stack }}
+          HUB_SLUG: ${{ needs.detect.outputs.hub_slug }}
+        run: |
+          INDEX=".product-hub/standards/index.yml"
+
+          if [ ! -d ".product-hub" ]; then
+            echo "::warning::product-hub checkout failed for '$HUB_SLUG' (checkout outcome: ${{ steps.checkout-hub-standards.outcome }}) — set PRODUCT_HUB_TOKEN or confirm it can read that repo. Skipping pattern scan."
+            exit 0
+          fi
+          if [ ! -f "$INDEX" ]; then
+            echo "::warning::product-hub checked out, but standards/index.yml is absent — no standards index to scan against. Skipping pattern scan."
+            exit 0
+          fi
+
+          # Get changed files in this PR
+          CHANGED_FILES=$(git diff --name-only "origin/$GITHUB_BASE_REF...HEAD" -- 'src/' 2>/dev/null || echo "")
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No source files changed — skipping standards scan"
+            exit 0
+          fi
+
+          echo "Scanning $(echo "$CHANGED_FILES" | wc -l | tr -d ' ') changed files for patterns..."
+
+          ALERTS=""
+          MATCHED=0
+          UNMATCHED=0
+
+          # --- Java pattern detection (Maven + Gradle; both are JVM/src) ---
+          if [ "$TECH" = "java" ] || [ "$TECH" = "gradle" ]; then
+            for FILE in $CHANGED_FILES; do
+              [ ! -f "$FILE" ] && continue
+
+              # Detect controller pattern
+              if grep -q '@RestController\|@Controller' "$FILE" 2>/dev/null; then
+                if grep -q 'STD-007' "$INDEX" 2>/dev/null; then
+                  MATCHED=$((MATCHED + 1))
+                else
+                  UNMATCHED=$((UNMATCHED + 1))
+                  ALERTS="$ALERTS\n- Controller pattern in $FILE (no matching standard)"
+                fi
+              fi
+
+              # Detect service pattern
+              if grep -q '@Service' "$FILE" 2>/dev/null; then
+                if grep -q 'STD-006' "$INDEX" 2>/dev/null; then
+                  MATCHED=$((MATCHED + 1))
+                else
+                  UNMATCHED=$((UNMATCHED + 1))
+                  ALERTS="$ALERTS\n- Service pattern in $FILE (no matching standard)"
+                fi
+              fi
+
+              # Detect entity/repository pattern
+              if grep -q '@Entity\|@Repository' "$FILE" 2>/dev/null; then
+                if grep -q 'STD-008' "$INDEX" 2>/dev/null; then
+                  MATCHED=$((MATCHED + 1))
+                else
+                  UNMATCHED=$((UNMATCHED + 1))
+                  ALERTS="$ALERTS\n- Entity/Repository pattern in $FILE (no matching standard)"
+                fi
+              fi
+
+              # Detect error handling pattern
+              if grep -q 'DomainException\|@ExceptionHandler\|ErrorCategory' "$FILE" 2>/dev/null; then
+                if grep -q 'STD-002' "$INDEX" 2>/dev/null; then
+                  MATCHED=$((MATCHED + 1))
+                else
+                  UNMATCHED=$((UNMATCHED + 1))
+                  ALERTS="$ALERTS\n- Error handling pattern in $FILE (no matching standard)"
+                fi
+              fi
+
+              # Detect API envelope pattern
+              if grep -q 'ApiEnvelope' "$FILE" 2>/dev/null; then
+                if grep -q 'STD-001' "$INDEX" 2>/dev/null; then
+                  MATCHED=$((MATCHED + 1))
+                else
+                  UNMATCHED=$((UNMATCHED + 1))
+                  ALERTS="$ALERTS\n- API envelope pattern in $FILE (no matching standard)"
+                fi
+              fi
+
+              # Detect event consumer pattern
+              if grep -q '@KafkaListener\|@RabbitListener\|@EventListener' "$FILE" 2>/dev/null; then
+                if grep -q 'STD-022' "$INDEX" 2>/dev/null; then
+                  MATCHED=$((MATCHED + 1))
+                else
+                  UNMATCHED=$((UNMATCHED + 1))
+                  ALERTS="$ALERTS\n- Event consumer pattern in $FILE (no matching standard)"
+                fi
+              fi
+
+              # Detect event publisher pattern
+              if grep -q 'KafkaTemplate\|StreamBridge\|EventPublisher' "$FILE" 2>/dev/null; then
+                if grep -q 'STD-021' "$INDEX" 2>/dev/null; then
+                  MATCHED=$((MATCHED + 1))
+                else
+                  UNMATCHED=$((UNMATCHED + 1))
+                  ALERTS="$ALERTS\n- Event publisher pattern in $FILE (no matching standard)"
+                fi
+              fi
+
+              # Detect test patterns
+              if echo "$FILE" | grep -qE 'Test\.java$|IT\.java$'; then
+                if grep -q 'STD-009' "$INDEX" 2>/dev/null; then
+                  MATCHED=$((MATCHED + 1))
+                else
+                  UNMATCHED=$((UNMATCHED + 1))
+                  ALERTS="$ALERTS\n- Test pattern in $FILE (no matching standard)"
+                fi
+              fi
+            done
+          fi
+
+          # --- Node.js pattern detection ---
+          if [ "$TECH" = "node" ]; then
+            for FILE in $CHANGED_FILES; do
+              [ ! -f "$FILE" ] && continue
+
+              # Detect React component pattern
+              if grep -qE 'export (default )?(function|const) \w+.*React\.|forwardRef|React\.FC' "$FILE" 2>/dev/null; then
+                if grep -q 'STD-004\|STD-012' "$INDEX" 2>/dev/null; then
+                  MATCHED=$((MATCHED + 1))
+                else
+                  UNMATCHED=$((UNMATCHED + 1))
+                  ALERTS="$ALERTS\n- React component pattern in $FILE (no matching standard)"
+                fi
+              fi
+
+              # Detect API client / React Query hook pattern
+              if grep -qE 'useQuery|useMutation|useInfiniteQuery|apiClient' "$FILE" 2>/dev/null; then
+                if grep -q 'STD-010' "$INDEX" 2>/dev/null; then
+                  MATCHED=$((MATCHED + 1))
+                else
+                  UNMATCHED=$((UNMATCHED + 1))
+                  ALERTS="$ALERTS\n- API client/hook pattern in $FILE (no matching standard)"
+                fi
+              fi
+
+              # Detect form pattern
+              if grep -qE 'useForm|FormField|handleSubmit|fieldErrors' "$FILE" 2>/dev/null; then
+                if grep -q 'STD-011' "$INDEX" 2>/dev/null; then
+                  MATCHED=$((MATCHED + 1))
+                else
+                  UNMATCHED=$((UNMATCHED + 1))
+                  ALERTS="$ALERTS\n- Form pattern in $FILE (no matching standard)"
+                fi
+              fi
+
+              # Detect page/routing pattern
+              if echo "$FILE" | grep -qE 'app/.*/page\.(tsx|ts|jsx|js)$'; then
+                if grep -q 'STD-013' "$INDEX" 2>/dev/null; then
+                  MATCHED=$((MATCHED + 1))
+                else
+                  UNMATCHED=$((UNMATCHED + 1))
+                  ALERTS="$ALERTS\n- Page/routing pattern in $FILE (no matching standard)"
+                fi
+              fi
+            done
+          fi
+
+          echo ""
+          echo "Standards compliance scan complete:"
+          echo "  Matched patterns: $MATCHED"
+          echo "  Unmatched patterns: $UNMATCHED"
+
+          if [ -n "$ALERTS" ]; then
+            echo -e "\nUnindexed Pattern Alerts:$ALERTS"
+          fi
+
+  # ===========================================================================
+  # Compliance Report (always runs)
+  # ===========================================================================
+  compliance-report:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [detect, spec-compliance, standards-compliance]
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v5
+
+      # --- QA evidence (advisory, qa-evidence.schema.json / STD-035) ---
+      # Every step degrades to a skip: a missing artifact, hub
+      # access, or package token must never take down the report. CI writes
+      # nothing back to the repo — evidence lands as the qa-evidence artifact
+      # + a PR-comment summary.
+      #
+      # KNOWN REGRESSION. These downloads now find nothing. The
+      # JUnit XML they read used to be uploaded by this workflow's own test
+      # job; tests moved to the project's workflow, so the XML
+      # lives in a *different* workflow run that this one cannot reach. The
+      # rail therefore reports nothing rather than something wrong, and the
+      # steps stay as the seam to restore it. Deliberately not fixed here:
+      # cross-run fetch needs a producing-run identity the qa-evidence schema
+      # has no field for, and stamping this run's id/url onto another run's
+      # results is exactly the self-attestation the evidence rail exists to
+      # remove. Tracked as backlog QA-6 (ie scenarios aggregate
+      # --from-run). The rail is advisory: nothing consumes qa-evidence
+      # automatically — finalize, the promotion credit and the delivery record
+      # are all untouched by it.
+      #
+      # Evidence must come from THIS run's artifacts — a committed
+      # qa-evidence.json or qa-results/ dir would otherwise survive the skip
+      # paths and pass off stale or fabricated inputs as CI-produced.
+      - name: Clear stale QA inputs
+        run: rm -rf qa-results qa-evidence.json
+
+      - name: Download test result XML
+        continue-on-error: true
+        uses: actions/download-artifact@v6
+        with:
+          name: test-results-xml
+          path: qa-results/test-results-xml
+
+      - name: Download E2E result XML
+        continue-on-error: true
+        uses: actions/download-artifact@v6
+        with:
+          name: e2e-results
+          path: qa-results/e2e-results
+
+      - name: Checkout product-hub (for scenario keys)
+        if: needs.detect.outputs.manifest_path != ''
+        continue-on-error: true
+        uses: actions/checkout@v5
+        with:
+          repository: ${{ needs.detect.outputs.hub_slug }}
+          token: ${{ secrets.PRODUCT_HUB_TOKEN || github.token }}
+          path: .product-hub
+          sparse-checkout: |
+            specs
+          sparse-checkout-cone-mode: false
+
+      - uses: actions/setup-node@v5
+        if: needs.detect.outputs.manifest_path != ''
+        continue-on-error: true
+        with:
+          node-version: '22'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@rp-flow'
+          package-manager-cache: false   # only npm-installs ie-cli; no deps to cache (v5 auto-cache breaks on pnpm hubs)
+
+      - name: Install ie CLI (for QA evidence)
+        if: needs.detect.outputs.manifest_path != ''
+        continue-on-error: true
+        run: npm install -g @rp-flow/ie-cli
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.IE_CLI_PACKAGES_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Assemble QA evidence
+        if: needs.detect.outputs.manifest_path != ''
+        env:
+          MANIFEST: ${{ needs.detect.outputs.manifest_path }}
+        run: |
+          if ! command -v ie >/dev/null 2>&1; then
+            echo "ie CLI unavailable — skipping QA evidence"
+            exit 0
+          fi
+          if [ ! -d ".product-hub" ]; then
+            echo "product-hub checkout unavailable — skipping QA evidence"
+            exit 0
+          fi
+          RESULT_DIRS=""
+          for dir in qa-results/test-results-xml qa-results/e2e-results; do
+            [ -d "$dir" ] && RESULT_DIRS="$RESULT_DIRS $dir"
+          done
+          if [ -z "$RESULT_DIRS" ]; then
+            echo "No result XML artifacts — skipping QA evidence (absence of evidence is recorded as absence, never as green)"
+            exit 0
+          fi
+          ie scenarios evidence --manifest "$MANIFEST" --hub .product-hub --results $RESULT_DIRS --out qa-evidence.json || {
+            echo "::warning::QA evidence assembly failed (advisory) — see the step log"
+            exit 0
+          }
+
+      - name: Upload QA evidence
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v6
+        with:
+          name: qa-evidence
+          path: qa-evidence.json
+          if-no-files-found: ignore
+
+      # Has finalize run? The detect job already resolves
+      # root-vs-archive manifest, so this is one condition on the manifest path:
+      # a feature-branch PR whose manifest is still at the ROOT has not been
+      # finalized. The wording carries BOTH readings on purpose — the check
+      # cannot tell them apart, and the two people reading it can: the author
+      # finalizes, or the reviewer stops reading because the PR is not ready.
+      #
+      # It matters because merging unfinalized leaves the root manifest on the
+      # integration branch and no archive on it, so `ie feature deliver` never
+      # sees its evidence and refuses, `--repos` reports in_progress forever, and
+      # `ie bug-report`'s file-existence proxy still believes the feature is in
+      # flight. Post-merge with the branch deleted, that is an awkward hole.
+      #
+      # The escalation must not delete the comment it
+      # escalates. `FINALIZE_BLOCKING=true` makes the block below exit 1 — and
+      # every step after it (the overall result, the build report, the artifact,
+      # and the PR comment this line is FOR) used to die with it, so a hub that
+      # opted into the stricter setting got less information than one that did
+      # not. `continue-on-error` absorbs the exit at the step level, the reporting
+      # runs, and `Fail on blocking finalize state` at the end of the job fails
+      # the job on the outcome this step recorded. The shell block is unchanged:
+      # it was correct in isolation all along, and nothing modelled the step graph.
+      - name: Check finalize state
+        id: finalize-state
+        continue-on-error: true
+        env:
+          MANIFEST_PATH: ${{ needs.detect.outputs.manifest_path }}
+          FEATURE_ID: ${{ needs.detect.outputs.feature_id }}
+          BLOCKING: ${{ vars.FINALIZE_BLOCKING }}
+        run: |
+          # BEGIN IE FINALIZE CHECK (exercised by quality-gates-finalize-check.test.ts)
+          if [ "$MANIFEST_PATH" = ".flowforge/manifest.yml" ]; then
+            MESSAGE="generation artifacts are still at the repo root — either \`ie generation finalize\` has not been run in this repo, or this PR is not ready for review yet"
+            echo "finalized=false" >> "$GITHUB_OUTPUT"
+            echo "message=$MESSAGE" >> "$GITHUB_OUTPUT"
+            if [ "$BLOCKING" = "true" ]; then
+              echo "::error::$MESSAGE (FINALIZE_BLOCKING=true)"
+              exit 1
+            fi
+            echo "::warning::$MESSAGE"
+          else
+            echo "finalized=true" >> "$GITHUB_OUTPUT"
+            echo "message=" >> "$GITHUB_OUTPUT"
+          fi
+          # END IE FINALIZE CHECK
+
+      # spec-compliance is the only blocking job here; standards-compliance is
+      # non-blocking. Whether the code builds and its tests pass is
+      # answered by the project's own workflow and enforced by branch
+      # protection, not by this result.
+      #
+      # The finalize check folds into this verdict when it is BLOCKING. An
+      # earlier fix moved the failure behind the reporting so the comment
+      # survives the escalation, and left the content keyed on spec-compliance
+      # alone — so with spec-compliance green the comment rendered
+      # "## ✅ Quality Gates — PASSED" and "No failures." beside a red required
+      # check, with nothing anywhere in it saying why the job failed. Item 8 put
+      # the finalize line in that comment "because it lands where a reviewer will
+      # actually see it"; a passing comment next to a failing check is worse than
+      # the warning-only state it escalated from. Warn-only is unchanged: with
+      # FINALIZE_BLOCKING off the finalize state is advisory and does not move
+      # this verdict.
+      - name: Determine overall result
+        id: overall
+        env:
+          SC: ${{ needs.spec-compliance.result }}
+          FINALIZED: ${{ steps.finalize-state.outputs.finalized }}
+          BLOCKING: ${{ vars.FINALIZE_BLOCKING }}
+        run: |
+          # `!= true` rather than `= false`: an unwritten output (the finalize step
+          # died on a shell error, `continue-on-error` absorbed it) is not a pass.
+          FINALIZE_FAILED=false
+          if [ "$BLOCKING" = "true" ] && [ "$FINALIZED" != "true" ]; then
+            FINALIZE_FAILED=true
+          fi
+          echo "finalize_failed=$FINALIZE_FAILED" >> $GITHUB_OUTPUT
+
+          if [ "$SC" = "success" ] && [ "$FINALIZE_FAILED" = "false" ]; then
+            echo "status=PASSED" >> $GITHUB_OUTPUT
+            echo "icon=✅" >> $GITHUB_OUTPUT
+          else
+            echo "status=FAILED" >> $GITHUB_OUTPUT
+            echo "icon=🛑" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate build report
+        id: report
+        # feature_id and branch name are PR-influenceable — env: only
+        # (script-injection hardening). Sed replacement of env-var values
+        # cannot execute code; worst case a hostile value breaks the sed
+        # expression and fails this reporting step.
+        env:
+          FEATURE_ID: ${{ needs.detect.outputs.feature_id }}
+          BRANCH: ${{ github.head_ref }}
+          RESULT: ${{ steps.overall.outputs.status }}
+          SC_RESULT: ${{ needs.spec-compliance.result }}
+          FINALIZE_FAILED: ${{ steps.overall.outputs.finalize_failed }}
+          FINALIZE_MESSAGE: ${{ steps.finalize-state.outputs.message }}
+        run: |
+          REPORT_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+
+          # Map job results to passed/failed
+          status_label() {
+            case "$1" in
+              success) echo "passed" ;;
+              failure) echo "failed" ;;
+              cancelled) echo "cancelled" ;;
+              skipped) echo "skipped" ;;
+              *) echo "$1" ;;
+            esac
+          }
+
+          SC_STATUS=$(status_label "${{ needs.spec-compliance.result }}")
+          ST_STATUS="completed (non-blocking)"
+
+          cat > build-report.md << 'REPORT_EOF'
+          # Spec Compliance Report — FEATURE_ID_PLACEHOLDER
+
+          ## Summary
+
+          | Field | Value |
+          |-------|-------|
+          | Run ID | RUN_ID_PLACEHOLDER |
+          | Branch | BRANCH_PLACEHOLDER |
+          | Commit | COMMIT_PLACEHOLDER |
+          | Run date | DATE_PLACEHOLDER |
+          | Result | RESULT_PLACEHOLDER |
+
+          ## Gate Results
+
+          | Gate | Status | Notes |
+          |------|--------|-------|
+          | Spec Compliance | SC_PLACEHOLDER | Blocking |
+          | Standards Compliance | ST_PLACEHOLDER | Non-blocking |
+
+          Build, tests and security scanning are this repo's own workflow and
+          are not reported here. Their results are enforced as
+          required checks on the integration branch.
+
+          ## Failures
+
+          FAILURES_PLACEHOLDER
+
+          ## Sign-Off
+
+          - **Result:** RESULT_PLACEHOLDER
+          - **Reviewed by:** automated
+          - **Date:** DATE_PLACEHOLDER
+          REPORT_EOF
+
+          # Replace placeholders
+          sed -i "s|FEATURE_ID_PLACEHOLDER|${FEATURE_ID}|g" build-report.md
+          sed -i "s|RUN_ID_PLACEHOLDER|#${GITHUB_RUN_ID}|g" build-report.md
+          sed -i "s|BRANCH_PLACEHOLDER|${BRANCH}|g" build-report.md
+          sed -i "s|COMMIT_PLACEHOLDER|${GITHUB_SHA}|g" build-report.md
+          sed -i "s|DATE_PLACEHOLDER|${REPORT_DATE}|g" build-report.md
+          sed -i "s|RESULT_PLACEHOLDER|${RESULT}|g" build-report.md
+          sed -i "s|SC_PLACEHOLDER|${SC_STATUS}|g" build-report.md
+          sed -i "s|ST_PLACEHOLDER|${ST_STATUS}|g" build-report.md
+
+          # Failures section — one line per gate that actually failed.
+          # It used to say "Spec compliance failed" for every non-PASSED
+          # result, which with a blocking finalize state names the wrong gate.
+          if [ "$RESULT" = "PASSED" ]; then
+            sed -i "s|FAILURES_PLACEHOLDER|No failures.|g" build-report.md
+          else
+            FAILURES=""
+            if [ "$SC_RESULT" != "success" ]; then
+              FAILURES="Spec compliance failed. Check the job log for the failing gate."
+            fi
+            if [ "$FINALIZE_FAILED" = "true" ]; then
+              FAILURES="${FAILURES:+${FAILURES} }Finalize check failed (FINALIZE_BLOCKING=true): ${FINALIZE_MESSAGE:-see the Check finalize state step log}."
+            fi
+            sed -i "s|FAILURES_PLACEHOLDER|${FAILURES:-Check the job log for the failing gate.}|g" build-report.md
+          fi
+
+          # Clean up leading whitespace from heredoc
+          sed -i 's/^          //' build-report.md
+
+      - name: Upload report artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: build-report
+          path: build-report.md
+
+      - name: Post PR comment
+        uses: actions/github-script@v8
+        # Step outputs and event data reach the script as env vars, never via
+        # ${{ }} inside the JS source — a hostile feature id or branch name
+        # could otherwise break out of the string literal and run JS with this
+        # job's token (script-injection hardening). needs.*.result values are
+        # GitHub-set enums and stay inline.
+        env:
+          OVERALL: ${{ steps.overall.outputs.status }}
+          ICON: ${{ steps.overall.outputs.icon }}
+          FEATURE_ID: ${{ needs.detect.outputs.feature_id }}
+          FINALIZE_MESSAGE: ${{ steps.finalize-state.outputs.message }}
+          FINALIZE_FAILED: ${{ steps.overall.outputs.finalize_failed }}
+        with:
+          script: |
+            const fs = require('fs');
+            const overall = process.env.OVERALL;
+            const icon = process.env.ICON;
+            const featureId = process.env.FEATURE_ID;
+            const branch = process.env.GITHUB_HEAD_REF;
+
+            const sc = '${{ needs.spec-compliance.result }}' === 'success' ? '✅' : '🛑';
+            const st = '⚠️'; // Always non-blocking
+
+            // QA evidence summary (advisory) — present only when the evidence
+            // step assembled a document this run (see the qa-evidence artifact).
+            let qa = '';
+            try {
+              const doc = JSON.parse(fs.readFileSync('qa-evidence.json', 'utf8'));
+              const t = doc.coverage.totals;
+              const offUniverse = doc.coverage.unknown_keys.length;
+              qa = `\n**Scenario evidence (advisory):** ${t.covered_pass}/${t.scenarios} covered-pass (${t.coverage_pct}%), ` +
+                `${t.covered_fail} failing, ${t.uncovered} uncovered` +
+                (offUniverse ? `, ${offUniverse} off-universe key${offUniverse === 1 ? '' : 's'}` : '') +
+                ` | results digest \`${doc.results.digest.substring(0, 12)}\` | artifact: qa-evidence\n`;
+            } catch { /* no evidence assembled this run */ }
+
+            // Finalize state — one line, two possible actions,
+            // addressed to whoever reads it first. When it is the reason this job
+            // failed, the line says so rather than reading as an aside next to a
+            // green header.
+            const finalizeMessage = process.env.FINALIZE_MESSAGE;
+            const finalizeFailed = process.env.FINALIZE_FAILED === 'true';
+            const finalize = finalizeMessage
+              ? `\n${finalizeFailed ? '🛑' : '⚠️'} **Finalize${finalizeFailed ? ' — blocking (FINALIZE_BLOCKING=true), this job fails on it' : ''}:** ${finalizeMessage}.\n`
+              : '';
+
+            // Review guide: the generated source plus the AI step summary
+            // (at the root before finalize, archived after) are what a
+            // reviewer reads; the rest of .flowforge/ is generation bookkeeping.
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              ...context.repo, pull_number: context.issue.number, per_page: 100,
+            });
+            const isSummary = f => /^\.flowforge\/(archive\/[^/]+\/)?ai-step-summary\.md$/.test(f.filename);
+            const isSkip = f => f.filename.startsWith('.flowforge/') && !isSummary(f);
+            const reviewFiles = [...files.filter(isSummary), ...files.filter(f => !isSummary(f) && !isSkip(f))];
+            const skippedCount = files.filter(isSkip).length;
+            const MAX_FILES = 50;
+            const reviewList = reviewFiles.slice(0, MAX_FILES)
+              .map(f => `- \`${f.filename}\`${f.status === 'removed' ? ' (removed)' : ''}`).join('\n') +
+              (reviewFiles.length > MAX_FILES ? `\n- … ${reviewFiles.length - MAX_FILES} more in the Files tab` : '');
+            const review = reviewFiles.length
+              ? `\n**Review these ${reviewFiles.length} file(s)**${files.some(isSummary) ? " — start with the AI step summary's Interpretation Log" : ''}:\n\n${reviewList}\n` +
+                (skippedCount ? `\n${skippedCount} file(s) under \`.flowforge/\` are generation bookkeeping and need no review.\n` : '')
+              : '';
+
+            const body = `## ${icon} Quality Gates — ${overall}
+
+            **Feature:** ${featureId} | **Branch:** ${branch} | **Commit:** \`${context.sha.substring(0, 7)}\`
+
+            | Gate | Result | Blocking |
+            |------|--------|----------|
+            | Spec Compliance | ${sc} | Yes |
+            | Standards Compliance | ${st} | No |
+
+            Build, tests and security scanning run in this repo's own workflow and are not checked here.
+            ${finalize}${qa}${review}
+            <details><summary>Full report</summary>
+
+            \`\`\`
+            ${fs.readFileSync('build-report.md', 'utf8')}
+            \`\`\`
+
+            </details>
+
+            ---
+            *Generated by Quality Gates (spec + standards) — [View run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})*`;
+
+            // Find and update existing comment or create new one
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(c =>
+              c.body.includes('Quality Gates') && c.user.type === 'Bot'
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      # The escalation, moved behind the reporting. Blocking
+      # still means blocking — the job fails — but only after the report, the
+      # artifact and the PR comment have landed, so turning `FINALIZE_BLOCKING`
+      # on now yields MORE information than leaving it off, not less.
+      #
+      # It keys on the VERDICT the overall step recorded, not on the check's step
+      # outcome: `outcome == 'failure'` is also what a shell
+      # error or an unwritable `$GITHUB_OUTPUT` produces, and this step then
+      # asserted "FINALIZE_BLOCKING is enabled" when it may not have been. The
+      # recorded verdict is true by construction — it is only `true` when the
+      # variable is set AND the check did not report a pass — so the message and
+      # the failure now agree, and the same verdict is what the comment above
+      # rendered.
+      - name: Fail on blocking finalize state
+        if: steps.overall.outputs.finalize_failed == 'true'
+        env:
+          FINALIZE_MESSAGE: ${{ steps.finalize-state.outputs.message }}
+        run: |
+          echo "FINALIZE_BLOCKING is enabled and the finalize check did not pass: ${FINALIZE_MESSAGE:-see the Check finalize state step log}"
+          echo "The spec-compliance report and the PR comment above are complete; failing the job now."
+          exit 1

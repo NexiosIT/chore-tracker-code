@@ -1,0 +1,9 @@
+# Checkout is LF on every platform, whatever the contributor's core.autocrlf says.
+# Everything the framework writes into this hub — commands, agents, specs, catalog,
+# manifests — is written with LF, and every baseline/spec hash normalizes line
+# endings, so a CRLF working tree makes hashes and generated files churn for a reason
+# that has nothing to do with the change under test. Without this, the very first
+# commit in a freshly created hub rewrites the line endings of every file it just
+# received, and warns about it once per file.
+# A tree that is already CRLF converges with `git add --renormalize .`.
+* text=auto eol=lf
