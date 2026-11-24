@@ -1,0 +1,163 @@
+# =============================================================================
+# API Contract — UC-015-reactivate-member
+# =============================================================================
+# Conformance convention:
+# - Schemas describe the UNWRAPPED body, in **camelCase**:
+#     success response → the `data` payload   ·   error response → the `error` body.
+#   The `{ data, error, meta }` envelope (STD-001) and the snake_case wire
+#   representation (STD-010) are applied UNIFORMLY by the service — do NOT
+#   model the envelope or snake_case here.
+# - Code-to-contract conformance (STD-024) unwraps the envelope and validates
+#   the body against these schemas, projecting camelCase → snake_case on the
+#   schema (oracle) side. Author every field in camelCase.
+# - Shared schemas (Member, SessionStarted, Error) are defined identically in
+#   every family contract that uses them.
+# =============================================================================
+
+openapi: "3.0.3"
+info:
+  title: "Reactivate member"
+  version: "1.0.0"
+
+paths:
+  /api/members/{memberId}/reactivate:
+    post:
+      operationId: reactivateMember
+      summary: Reactivate a deactivated member so they can log in with their existing password.
+      tags:
+        - family
+      security:
+        - sessionToken: []
+      parameters:
+        - name: memberId
+          in: path
+          required: true
+          description: Id of the family member to act on.
+          schema:
+            type: string
+            format: uuid
+            example: 4e2a9c7b-1d5f-4b3a-8c6e-9a0b2d4f6e81
+      responses:
+        "200":
+          description: The member with the new status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Member"
+        "401":
+          description: >-
+            No session token, or the session has ended through logout, a password change, a password
+            reset or a deactivation (code AUTHENTICATION_REQUIRED). The app shows the Login screen.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: AUTHENTICATION_REQUIRED
+                message: Your session has ended. Log in again.
+        "403":
+          description: The caller is a kid, not a parent (code AUTHORIZATION_PARENT_ONLY).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: AUTHORIZATION_PARENT_ONLY
+                message: Only a parent can do this.
+        "404":
+          description: No family member has this id (code NOT_FOUND_MEMBER).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: NOT_FOUND_MEMBER
+                message: That family member does not exist.
+        "409":
+          description: The member is already active (code CONFLICT_MEMBER_ALREADY_ACTIVE).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: CONFLICT_MEMBER_ALREADY_ACTIVE
+                message: This member is already active.
+
+components:
+  securitySchemes:
+    sessionToken:
+      type: http
+      scheme: bearer
+      description: Opaque session token returned by found-family or log-in.
+  schemas:
+    Member:
+      type: object
+      required:
+        - id
+        - username
+        - displayName
+        - role
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 7d1c6b2e-4f8a-4c3e-9b1a-2f5d8e6a9c01
+        username:
+          type: string
+          description: Login name as typed at creation.
+          example: Sanne_V
+        displayName:
+          type: string
+          example: Mama
+        role:
+          type: string
+          enum:
+            - parent
+            - kid
+          example: parent
+        status:
+          type: string
+          enum:
+            - active
+            - deactivated
+          example: active
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code (SCREAMING_SNAKE_CASE — STD-002).
+          example: VALIDATION_FAILED
+        message:
+          type: string
+          description: Human-readable message, safe to display to end users.
+          example: Some fields need attention.
+        retryAt:
+          type: string
+          format: date-time
+          description: When a locked-out username may try again (only with code RATE_LIMIT_LOGIN_LOCKED).
+          example: "2026-11-23T14:32:00Z"
+        details:
+          type: array
+          description: Field-level validation errors (HTTP 400 — STD-001 Rule 8).
+          items:
+            type: object
+            required:
+              - field
+              - rule
+              - message
+            properties:
+              field:
+                type: string
+                example: username
+              rule:
+                type: string
+                example: length
+              message:
+                type: string
+                example: Username needs 3 to 20 characters

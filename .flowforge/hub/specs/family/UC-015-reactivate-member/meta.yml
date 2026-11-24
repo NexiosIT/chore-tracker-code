@@ -1,0 +1,33 @@
+id: UC-015
+name: reactivate-member
+slug: reactivate-member
+domain: family
+service: chore-tracker-api
+actor: Parent
+goal: As a parent, I want to reactivate a deactivated family member, so that they can use the family space again with their history intact.
+preconditions:
+  - The caller is logged in as an active parent.
+  - The target member is deactivated.
+postconditions:
+  - The member's status is active.
+  - The member can log in again with their existing password.
+  - Sessions ended by the deactivation stay ended.
+status: draft
+version: 1.0.0
+priority: P1
+related_screens:
+  - SCR-006
+related_specs:
+  - UC-003
+  - UC-013
+  - UC-014
+dependencies:
+  calls: []
+  called_by: []
+spec_hash: 04ca89fee95a7fad6e3c3156e254c0e9a14e3f8917491e9470f202b5637982e8
+contract_hashes:
+  Member: 575d8cd3695658f2609cfb651651a3543298ef907aa5ba3b1a3b7bc092dab01d
+  Error: a3b97a5bfa4d8d9c2910984b630f3bb5252903dbd3ce13dedbdbba7b3424bc44
+endpoint: POST /api/members/{memberId}/reactivate
+entities:
+  - family-member

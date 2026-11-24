@@ -1,0 +1,194 @@
+# =============================================================================
+# API Contract — UC-001-found-family
+# =============================================================================
+# Conformance convention:
+# - Schemas describe the UNWRAPPED body, in **camelCase**:
+#     success response → the `data` payload   ·   error response → the `error` body.
+#   The `{ data, error, meta }` envelope (STD-001) and the snake_case wire
+#   representation (STD-010) are applied UNIFORMLY by the service — do NOT
+#   model the envelope or snake_case here.
+# - Code-to-contract conformance (STD-024) unwraps the envelope and validates
+#   the body against these schemas, projecting camelCase → snake_case on the
+#   schema (oracle) side. Author every field in camelCase.
+# - Shared schemas (Member, SessionStarted, Error) are defined identically in
+#   every family contract that uses them.
+# =============================================================================
+
+openapi: "3.0.3"
+info:
+  title: "Found family"
+  version: "1.0.0"
+
+paths:
+  /api/family:
+    post:
+      operationId: foundFamily
+      summary: Create the family and its first active parent, and start a session for that parent.
+      description: >-
+        Anonymous. Allowed only while no family member exists. The response carries a session
+        token that the app sends as `Authorization: Bearer <token>` on later calls.
+      tags:
+        - family
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FoundFamilyRequest"
+      responses:
+        "201":
+          description: Family founded; the first parent is logged in.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SessionStarted"
+        "400":
+          description: >-
+            One or more input rules are broken (code VALIDATION_FAILED). Every broken rule is
+            listed in `details`.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: VALIDATION_FAILED
+                message: Some fields need attention.
+                details:
+                  - field: parentConfirmed
+                    rule: mustBeTrue
+                    message: Confirm that you are a parent setting up this family
+        "409":
+          description: A family already exists (code CONFLICT_FAMILY_EXISTS). No account is created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: CONFLICT_FAMILY_EXISTS
+                message: This family is already set up. Log in instead.
+
+components:
+  securitySchemes:
+    sessionToken:
+      type: http
+      scheme: bearer
+      description: Opaque session token returned by found-family or log-in.
+  schemas:
+    FoundFamilyRequest:
+      type: object
+      required:
+        - username
+        - displayName
+        - password
+        - parentConfirmed
+      properties:
+        username:
+          type: string
+          description: >-
+            Login name, 3 to 20 letters, digits or underscores. Stored as typed and unique
+            ignoring case. Length and pattern are checked by the service so every broken rule
+            can be reported.
+          example: Sanne_V
+        displayName:
+          type: string
+          description: >-
+            Name shown to the family. 1 to 30 characters after leading and trailing spaces are
+            removed. Need not be unique.
+          example: Mama
+        password:
+          type: string
+          format: password
+          description: 8 to 64 characters, no composition rules. Never returned or logged.
+          example: zonnebloem42
+        parentConfirmed:
+          type: boolean
+          description: The "I am a parent setting up this family" confirmation. Must be true.
+          example: true
+
+    SessionStarted:
+      type: object
+      required:
+        - token
+        - member
+      properties:
+        token:
+          type: string
+          description: >-
+            Opaque session token. Sent as `Authorization: Bearer <token>`. Valid until logout or
+            until a password change, a password reset or a deactivation ends the session.
+          example: 3q2+7w8kQe0f5mB1yZr9xA
+        member:
+          $ref: "#/components/schemas/Member"
+
+    Member:
+      type: object
+      required:
+        - id
+        - username
+        - displayName
+        - role
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 7d1c6b2e-4f8a-4c3e-9b1a-2f5d8e6a9c01
+        username:
+          type: string
+          description: Login name as typed at creation.
+          example: Sanne_V
+        displayName:
+          type: string
+          example: Mama
+        role:
+          type: string
+          enum:
+            - parent
+            - kid
+          example: parent
+        status:
+          type: string
+          enum:
+            - active
+            - deactivated
+          example: active
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code (SCREAMING_SNAKE_CASE — STD-002).
+          example: VALIDATION_FAILED
+        message:
+          type: string
+          description: Human-readable message, safe to display to end users.
+          example: Some fields need attention.
+        retryAt:
+          type: string
+          format: date-time
+          description: When a locked-out username may try again (only with code RATE_LIMIT_LOGIN_LOCKED).
+          example: "2026-11-23T14:32:00Z"
+        details:
+          type: array
+          description: Field-level validation errors (HTTP 400 — STD-001 Rule 8).
+          items:
+            type: object
+            required:
+              - field
+              - rule
+              - message
+            properties:
+              field:
+                type: string
+                example: username
+              rule:
+                type: string
+                example: length
+              message:
+                type: string
+                example: Username needs 3 to 20 characters

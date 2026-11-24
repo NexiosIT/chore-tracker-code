@@ -1,0 +1,175 @@
+# =============================================================================
+# API Contract — UC-006-register-kid
+# =============================================================================
+# Conformance convention:
+# - Schemas describe the UNWRAPPED body, in **camelCase**:
+#     success response → the `data` payload   ·   error response → the `error` body.
+#   The `{ data, error, meta }` envelope (STD-001) and the snake_case wire
+#   representation (STD-010) are applied UNIFORMLY by the service — do NOT
+#   model the envelope or snake_case here.
+# - Code-to-contract conformance (STD-024) unwraps the envelope and validates
+#   the body against these schemas, projecting camelCase → snake_case on the
+#   schema (oracle) side. Author every field in camelCase.
+# - Shared schemas (Member, SessionStarted, Error) are defined identically in
+#   every family contract that uses them.
+# =============================================================================
+
+openapi: "3.0.3"
+info:
+  title: "Register kid"
+  version: "1.0.0"
+
+paths:
+  /api/registrations:
+    post:
+      operationId: registerKid
+      summary: Create a pending kid registration that a parent approves or rejects later.
+      description: Anonymous. No session is started; the kid can log in only after approval.
+      tags:
+        - family
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterKidRequest"
+      responses:
+        "201":
+          description: Registration created with status pending.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Registration"
+        "400":
+          description: One or more input rules are broken (code VALIDATION_FAILED). Every broken rule is listed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: VALIDATION_FAILED
+                message: Some fields need attention.
+                details:
+                  - field: password
+                    rule: minLength
+                    message: Password needs at least 8 characters
+        "409":
+          description: >-
+            The username is used by a family member or a pending registration, ignoring case
+            (code CONFLICT_USERNAME_TAKEN).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: CONFLICT_USERNAME_TAKEN
+                message: That username is taken. Choose another one.
+        "422":
+          description: No family exists yet (code BUSINESS_FAMILY_NOT_SET_UP).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: BUSINESS_FAMILY_NOT_SET_UP
+                message: The family is not set up yet. A parent has to set it up first.
+
+components:
+  securitySchemes:
+    sessionToken:
+      type: http
+      scheme: bearer
+      description: Opaque session token returned by found-family or log-in.
+  schemas:
+    RegisterKidRequest:
+      type: object
+      required:
+        - username
+        - displayName
+        - password
+      properties:
+        username:
+          type: string
+          description: 3 to 20 letters, digits or underscores; unique ignoring case. Checked by the service so every broken rule is reported.
+          example: Roos_K
+        displayName:
+          type: string
+          description: 1 to 30 characters after leading and trailing spaces are removed.
+          example: Roos
+        password:
+          type: string
+          format: password
+          description: 8 to 64 characters. Never returned or logged.
+          example: roosje2016
+
+    Registration:
+      type: object
+      required:
+        - id
+        - username
+        - displayName
+        - status
+        - requestedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 2b9e4c1a-6d3f-4a8b-9c2e-5f1d7a3b8e40
+        username:
+          type: string
+          description: Requested login name as typed.
+          example: Roos_K
+        displayName:
+          type: string
+          example: Roos
+        status:
+          type: string
+          enum:
+            - pending
+            - approved
+            - rejected
+          example: pending
+        requestedAt:
+          type: string
+          format: date-time
+          example: "2026-11-23T16:05:00Z"
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code (SCREAMING_SNAKE_CASE — STD-002).
+          example: VALIDATION_FAILED
+        message:
+          type: string
+          description: Human-readable message, safe to display to end users.
+          example: Some fields need attention.
+        retryAt:
+          type: string
+          format: date-time
+          description: When a locked-out username may try again (only with code RATE_LIMIT_LOGIN_LOCKED).
+          example: "2026-11-23T14:32:00Z"
+        details:
+          type: array
+          description: Field-level validation errors (HTTP 400 — STD-001 Rule 8).
+          items:
+            type: object
+            required:
+              - field
+              - rule
+              - message
+            properties:
+              field:
+                type: string
+                example: username
+              rule:
+                type: string
+                example: length
+              message:
+                type: string
+                example: Username needs 3 to 20 characters

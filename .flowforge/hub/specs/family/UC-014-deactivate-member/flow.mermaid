@@ -1,0 +1,6 @@
+stateDiagram-v2
+    [*] --> active : created (UC-001, UC-008, UC-010)
+    active --> deactivated : parent deactivates, all sessions ended (200)
+    active --> active : last active parent, 422 BUSINESS_LAST_ACTIVE_PARENT
+    deactivated --> deactivated : deactivate again, 409 already deactivated
+    deactivated --> active : parent reactivates (UC-015)

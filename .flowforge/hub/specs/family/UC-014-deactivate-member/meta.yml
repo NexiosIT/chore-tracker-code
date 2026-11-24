@@ -1,0 +1,38 @@
+id: UC-014
+name: deactivate-member
+slug: deactivate-member
+domain: family
+service: chore-tracker-api
+actor: Parent
+goal: As a parent, I want to deactivate a family member's account, so that I control who can use the family space without losing anyone's history.
+preconditions:
+  - The caller is logged in as an active parent.
+  - The target member is active.
+  - After the deactivation at least one active parent remains.
+postconditions:
+  - The member's status is deactivated and none of their data is deleted.
+  - All sessions of the member are ended, so their next action on any device shows the Login screen.
+  - The member stays in the members list with status deactivated.
+  - Each ended session is removed and a session end record is written with the member, the session's start time, the end time and reason deactivation.
+status: draft
+version: 1.0.0
+priority: P1
+related_screens:
+  - SCR-006
+related_specs:
+  - UC-003
+  - UC-005
+  - UC-013
+  - UC-015
+dependencies:
+  calls: []
+  called_by: []
+spec_hash: 2adb26375866d28690180f7e6f036fbf75e6b70ad66c325221d660f18dfbf437
+contract_hashes:
+  Member: 575d8cd3695658f2609cfb651651a3543298ef907aa5ba3b1a3b7bc092dab01d
+  Error: a3b97a5bfa4d8d9c2910984b630f3bb5252903dbd3ce13dedbdbba7b3424bc44
+endpoint: POST /api/members/{memberId}/deactivate
+entities:
+  - family-member
+  - session
+  - session-end-record

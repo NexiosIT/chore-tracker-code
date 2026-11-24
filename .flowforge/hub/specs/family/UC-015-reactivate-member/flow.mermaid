@@ -1,0 +1,5 @@
+stateDiagram-v2
+    [*] --> deactivated : parent deactivates (UC-014)
+    deactivated --> active : parent reactivates (200), old sessions stay ended
+    active --> active : reactivate again, 409 already active
+    deactivated --> deactivated : kid or no session, 403 or 401

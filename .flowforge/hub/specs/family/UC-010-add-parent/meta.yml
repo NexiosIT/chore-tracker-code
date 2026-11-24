@@ -1,0 +1,36 @@
+id: UC-010
+name: add-parent
+slug: add-parent
+domain: family
+service: chore-tracker-api
+actor: Parent
+goal: As a parent, I want to create an account for my partner, so that they can manage chores and approvals too.
+preconditions:
+  - The caller is logged in as an active parent.
+postconditions:
+  - An active family member with the parent role exists with the submitted username (as typed), display name and a hashed initial password, with no approval step.
+  - The new parent appears in the members list as an active parent.
+  - The new parent can log in with the initial password.
+  - The caller's own session is unaffected and no session is started for the new parent.
+status: draft
+version: 1.0.0
+priority: P1
+related_screens:
+  - SCR-007
+  - SCR-006
+related_specs:
+  - UC-003
+  - UC-006
+  - UC-013
+dependencies:
+  calls: []
+  called_by: []
+spec_hash: 07964cc8b8914263a94e125f04d5f3f3260f2c3ec918aca83bbef1ba077a591c
+contract_hashes:
+  AddParentRequest: aba95e42685d520259cca4d3fffd994c4c2914bf918cb264d4f76cc613420c5b
+  Member: 575d8cd3695658f2609cfb651651a3543298ef907aa5ba3b1a3b7bc092dab01d
+  Error: a3b97a5bfa4d8d9c2910984b630f3bb5252903dbd3ce13dedbdbba7b3424bc44
+endpoint: POST /api/members/parents
+entities:
+  - family-member
+  - registration

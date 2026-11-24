@@ -1,0 +1,36 @@
+id: UC-001
+name: found-family
+slug: found-family
+domain: family
+service: chore-tracker-api
+actor: Founding parent (anonymous, fresh install)
+goal: As the first parent on a fresh install, I want to create my account and the family in one step, so that I can start bringing in the rest of the family.
+preconditions:
+  - No family exists yet, which means no family member of any role or status exists.
+  - The caller is not logged in.
+postconditions:
+  - The family exists.
+  - One active family member with the parent role exists, with the submitted username (stored as typed), display name and a hashed password.
+  - A session exists for that parent and its token is returned to the caller.
+  - A refused setup creates no family member and no session.
+status: draft
+version: 1.0.0
+priority: P1
+related_screens:
+  - SCR-001
+related_specs:
+  - UC-002
+  - UC-003
+dependencies:
+  calls: []
+  called_by: []
+spec_hash: 7a07d943c24af5ad411821658e03a11141e3760851aa39a35d2f222c23951655
+contract_hashes:
+  FoundFamilyRequest: 51cc739a1a6b5c8d6893dc32ff120b3f2bb20db3b4148de27d77f02c4339968d
+  SessionStarted: 59defb650d00948b632d19a173a93e17f718e43eeb1a38e1006d8e53c5db4f64
+  Member: 575d8cd3695658f2609cfb651651a3543298ef907aa5ba3b1a3b7bc092dab01d
+  Error: a3b97a5bfa4d8d9c2910984b630f3bb5252903dbd3ce13dedbdbba7b3424bc44
+endpoint: POST /api/family
+entities:
+  - family-member
+  - session

@@ -1,0 +1,21 @@
+flowchart TD
+    A[Login with username and password] --> V{Both given?}
+    V -- no --> E400[400 VALIDATION_FAILED, count unchanged]
+    V -- yes --> L{Username locked now?}
+    L -- yes --> E429[429 RATE_LIMIT_LOGIN_LOCKED with retryAt]
+    L -- no --> M{Member with this username, any case?}
+    M -- yes --> MP{Password matches?}
+    MP -- no --> F[Add one to the failed-attempt count]
+    MP -- yes --> MS{Member active?}
+    MS -- no --> E403D[403 AUTHORIZATION_ACCOUNT_DEACTIVATED, count unchanged]
+    MS -- yes --> OK[Reset count, start session, 201 with token and member]
+    M -- no --> P{Pending registration with this username?}
+    P -- yes --> PP{Password matches?}
+    PP -- yes --> E403P[403 AUTHORIZATION_REGISTRATION_PENDING, count unchanged]
+    PP -- no --> F
+    P -- no --> R{Rejected registration with this username and matching password?}
+    R -- yes --> E403R[403 AUTHORIZATION_REGISTRATION_REJECTED, count unchanged]
+    R -- no --> F
+    F --> C{Count reached 5?}
+    C -- yes --> LOCK[Lock username for 15 minutes] --> E429
+    C -- no --> E401[401 AUTHENTICATION_FAILED: Username or password incorrect]

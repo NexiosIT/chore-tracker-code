@@ -1,0 +1,33 @@
+id: UC-005
+name: get-current-member
+slug: get-current-member
+domain: family
+service: chore-tracker-api
+actor: Logged-in family member (parent or kid)
+goal: As a logged-in family member's app, I want to know whose session this is, so that I show the right role's screens after a restart and send an ended session to the Login screen.
+preconditions:
+  - The caller sends a session token.
+postconditions:
+  - The response returns the member the session belongs to, with id, username, display name, role and status.
+  - Nothing is changed.
+status: draft
+version: 1.0.0
+priority: P1
+related_screens:
+  - SCR-004
+related_specs:
+  - UC-003
+  - UC-011
+  - UC-012
+  - UC-014
+dependencies:
+  calls: []
+  called_by: []
+spec_hash: da822ab17c46da312929e918b13445930f7115673b7a2a92e71f80641136d551
+contract_hashes:
+  Member: 575d8cd3695658f2609cfb651651a3543298ef907aa5ba3b1a3b7bc092dab01d
+  Error: a3b97a5bfa4d8d9c2910984b630f3bb5252903dbd3ce13dedbdbba7b3424bc44
+endpoint: GET /api/members/me
+entities:
+  - session
+  - family-member

@@ -1,0 +1,40 @@
+id: UC-003
+name: log-in
+slug: log-in
+domain: family
+service: chore-tracker-api
+actor: Family member (parent or kid) who is not logged in on this device
+goal: As a family member, I want to log in with my username and password and stay logged in on my phone, so that I don't have to type them every time.
+preconditions:
+  - The family exists.
+  - The caller is not logged in on this device.
+postconditions:
+  - On success, a new session for the member exists and its token is returned; the member's other sessions are unaffected.
+  - On success, the failed-attempt count for the submitted username is reset to zero.
+  - A failure with an unknown username or a wrong password adds one to the failed-attempt count of the submitted username, ignoring case.
+status: draft
+version: 1.0.0
+priority: P1
+related_screens:
+  - SCR-002
+related_specs:
+  - UC-001
+  - UC-004
+  - UC-006
+  - UC-012
+  - UC-014
+dependencies:
+  calls: []
+  called_by: []
+spec_hash: 98803d30374483598104ab68441565eec45f608d821cb07dba8d859524d6d54b
+contract_hashes:
+  LogInRequest: 406a07da7ae7446f75eca7c1507ca562d307f5661fc8cc0acf6d854e860c42c4
+  SessionStarted: 59defb650d00948b632d19a173a93e17f718e43eeb1a38e1006d8e53c5db4f64
+  Member: 575d8cd3695658f2609cfb651651a3543298ef907aa5ba3b1a3b7bc092dab01d
+  Error: a3b97a5bfa4d8d9c2910984b630f3bb5252903dbd3ce13dedbdbba7b3424bc44
+endpoint: POST /api/sessions
+entities:
+  - family-member
+  - registration
+  - session
+  - login-lockout

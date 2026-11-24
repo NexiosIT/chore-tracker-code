@@ -1,0 +1,10 @@
+flowchart TD
+    A[Person submits setup] --> B{Does any family member exist?}
+    B -- yes --> E409[409 CONFLICT_FAMILY_EXISTS, nothing created]
+    B -- no --> C{Are all input rules met?<br/>username, display name, password, parent confirmation}
+    C -- no --> E400[400 VALIDATION_FAILED, every broken rule listed]
+    C -- yes --> D[Create active parent with hashed password]
+    D --> F{Did another setup commit first?}
+    F -- yes --> E409
+    F -- no --> G[Start session for the parent]
+    G --> H[201 with session token and member]

@@ -1,0 +1,38 @@
+id: UC-006
+name: register-kid
+slug: register-kid
+domain: family
+service: chore-tracker-api
+actor: Kid who has no account yet (anonymous)
+goal: As a kid, I want to create my own account with a username and password, so that I can start using the app once a parent lets me in.
+preconditions:
+  - The family exists.
+  - The caller is not logged in. A session token, if sent, is ignored.
+postconditions:
+  - A registration with status pending exists with the submitted username (as typed), display name, hashed password and requested time.
+  - The registration's username is reserved, so no member or other pending registration can take it in any case.
+  - The pending registration appears in the pending registrations list of every active parent.
+  - No family member and no session is created.
+status: draft
+version: 1.0.0
+priority: P1
+related_screens:
+  - SCR-003
+related_specs:
+  - UC-003
+  - UC-007
+  - UC-008
+  - UC-009
+  - UC-010
+dependencies:
+  calls: []
+  called_by: []
+spec_hash: c3ba2d77f20405dcafb53ed89e4d07cff4ab2deb7f04e5d4c560e1b066ee8be2
+contract_hashes:
+  RegisterKidRequest: aba95e42685d520259cca4d3fffd994c4c2914bf918cb264d4f76cc613420c5b
+  Registration: cafb8eefd83f54128d408bbe52b714c67033474e5a468feb9b7a15d7276f60d0
+  Error: a3b97a5bfa4d8d9c2910984b630f3bb5252903dbd3ce13dedbdbba7b3424bc44
+endpoint: POST /api/registrations
+entities:
+  - registration
+  - family-member

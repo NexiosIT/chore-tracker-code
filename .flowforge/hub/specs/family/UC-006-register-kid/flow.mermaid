@@ -1,0 +1,11 @@
+flowchart TD
+    A[Kid submits registration] --> F{Does the family exist?}
+    F -- no --> E422[422 BUSINESS_FAMILY_NOT_SET_UP]
+    F -- yes --> V{All input rules met?}
+    V -- no --> E400[400 VALIDATION_FAILED, every broken rule listed]
+    V -- yes --> U{Username used by a member or pending registration, any case?}
+    U -- yes --> E409[409 CONFLICT_USERNAME_TAKEN]
+    U -- no --> C[Create pending registration with hashed password]
+    C --> R{Lost a race on the same username?}
+    R -- yes --> E409
+    R -- no --> OK[201 registration, status pending]

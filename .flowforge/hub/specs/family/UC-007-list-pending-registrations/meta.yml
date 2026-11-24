@@ -1,0 +1,34 @@
+id: UC-007
+name: list-pending-registrations
+slug: list-pending-registrations
+domain: family
+service: chore-tracker-api
+actor: Parent
+goal: As a parent, I want to see every pending kid registration and how many there are, so that I can approve or reject them and notice new ones from the badge.
+preconditions:
+  - The caller is logged in as an active parent.
+postconditions:
+  - The response returns every pending registration, oldest first, with username, display name and requested time.
+  - The response returns the count of pending registrations, which drives the badge.
+  - Nothing is changed.
+status: draft
+version: 1.0.0
+priority: P1
+related_screens:
+  - SCR-004
+  - SCR-005
+related_specs:
+  - UC-006
+  - UC-008
+  - UC-009
+dependencies:
+  calls: []
+  called_by: []
+spec_hash: 82e31f7f563be991bec8e4ff74dabad8113907196368f1f5b7d3be4c2892128c
+contract_hashes:
+  PendingRegistrations: a177821b615e6fab6708ef01e524bedd62da10e402297113c42e88f0275f8b62
+  Registration: cafb8eefd83f54128d408bbe52b714c67033474e5a468feb9b7a15d7276f60d0
+  Error: a3b97a5bfa4d8d9c2910984b630f3bb5252903dbd3ce13dedbdbba7b3424bc44
+endpoint: GET /api/registrations/pending
+entities:
+  - registration

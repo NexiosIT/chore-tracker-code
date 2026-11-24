@@ -1,0 +1,30 @@
+id: UC-004
+name: log-out
+slug: log-out
+domain: family
+service: chore-tracker-api
+actor: Logged-in family member (parent or kid)
+goal: As a logged-in family member, I want to log out on this device, so that nobody else can use my account on it.
+preconditions:
+  - The caller sends the token of a session that has not ended.
+postconditions:
+  - The session used for the call has ended and its token is no longer accepted.
+  - The member's sessions on other devices are unaffected.
+  - Each ended session is removed and a session end record is written with the member, the session's start time, the end time and reason logout.
+status: draft
+version: 1.0.0
+priority: P1
+related_screens:
+  - SCR-004
+related_specs:
+  - UC-003
+dependencies:
+  calls: []
+  called_by: []
+spec_hash: a80048a6c052459bb1b8a81824f9b61d30d1951023bff22b436476c49f1c2b92
+contract_hashes:
+  Error: a3b97a5bfa4d8d9c2910984b630f3bb5252903dbd3ce13dedbdbba7b3424bc44
+endpoint: DELETE /api/sessions/current
+entities:
+  - session
+  - session-end-record

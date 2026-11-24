@@ -1,0 +1,9 @@
+stateDiagram-v2
+    [*] --> pending : kid registers (UC-006)
+    pending --> rejected : parent rejects, username freed (200)
+    pending --> approved : parent approves (UC-008)
+    rejected --> rejected : reject again, 409 already rejected
+    approved --> approved : reject, 409 already approved
+    pending --> pending : kid or no session, 403 or 401
+    approved --> [*]
+    rejected --> [*]

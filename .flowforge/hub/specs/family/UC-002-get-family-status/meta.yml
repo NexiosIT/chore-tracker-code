@@ -1,0 +1,30 @@
+id: UC-002
+name: get-family-status
+slug: get-family-status
+domain: family
+service: chore-tracker-api
+actor: App on a device where nobody is logged in (anonymous)
+goal: As the app on a device where nobody is logged in, I want to know whether the family exists, so that I offer the Setup screen on a fresh install and the Login screen otherwise.
+preconditions:
+  - None. The call is anonymous and works whether or not a family exists.
+postconditions:
+  - The response tells whether the family exists.
+  - Nothing is changed, and no member detail is revealed.
+status: draft
+version: 1.0.0
+priority: P1
+related_screens:
+  - SCR-001
+  - SCR-002
+related_specs:
+  - UC-001
+dependencies:
+  calls: []
+  called_by: []
+spec_hash: 8b93131a5dc36c7f739bf6dd52b9b3f5684b7e1858b28095bd02137da0e11527
+contract_hashes:
+  FamilyStatus: 5a31d20f155e4690d7044a9c723b34f5d9a6709a95b8fbac46bef6b5fce68107
+  Error: a3b97a5bfa4d8d9c2910984b630f3bb5252903dbd3ce13dedbdbba7b3424bc44
+endpoint: GET /api/family/status
+entities:
+  - family-member

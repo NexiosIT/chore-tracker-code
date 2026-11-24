@@ -1,0 +1,9 @@
+stateDiagram-v2
+    [*] --> pending : kid registers (UC-006)
+    pending --> approved : parent approves, active kid created (201)
+    pending --> rejected : parent rejects (UC-009)
+    approved --> approved : approve again, 409 already approved
+    rejected --> rejected : approve, 409 already rejected
+    pending --> pending : kid or no session, 403 or 401
+    approved --> [*]
+    rejected --> [*]

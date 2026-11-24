@@ -1,0 +1,35 @@
+id: UC-009
+name: reject-registration
+slug: reject-registration
+domain: family
+service: chore-tracker-api
+actor: Parent
+goal: As a parent, I want to reject a kid's pending registration, so that only my own kids can join the family.
+preconditions:
+  - The caller is logged in as an active parent.
+  - The registration exists and is pending.
+postconditions:
+  - The registration is marked rejected, is kept on record, and is no longer in the pending list.
+  - The registration's username is freed, so a new registration or member can use it.
+  - No family member is created.
+  - The registration records the deciding parent and the decision time.
+status: draft
+version: 1.0.0
+priority: P1
+related_screens:
+  - SCR-005
+related_specs:
+  - UC-006
+  - UC-007
+  - UC-008
+  - UC-003
+dependencies:
+  calls: []
+  called_by: []
+spec_hash: bbd87b5292d7e922ede370dfc7a62d4bd2aa71dda4f95f7d5ff95b7cff51f47f
+contract_hashes:
+  Registration: cafb8eefd83f54128d408bbe52b714c67033474e5a468feb9b7a15d7276f60d0
+  Error: a3b97a5bfa4d8d9c2910984b630f3bb5252903dbd3ce13dedbdbba7b3424bc44
+endpoint: POST /api/registrations/{registrationId}/reject
+entities:
+  - registration

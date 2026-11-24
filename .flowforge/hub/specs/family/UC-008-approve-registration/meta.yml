@@ -1,0 +1,36 @@
+id: UC-008
+name: approve-registration
+slug: approve-registration
+domain: family
+service: chore-tracker-api
+actor: Parent
+goal: As a parent, I want to approve a kid's pending registration, so that my kid can log in and join the family.
+preconditions:
+  - The caller is logged in as an active parent.
+  - The registration exists and is pending.
+postconditions:
+  - An active family member with the kid role exists with the registration's username, display name and password hash.
+  - The registration is marked approved and is no longer in the pending list.
+  - The kid can log in with the password chosen at registration.
+  - The registration records the deciding parent, the decision time and the id of the member it created.
+status: draft
+version: 1.0.0
+priority: P1
+related_screens:
+  - SCR-005
+related_specs:
+  - UC-006
+  - UC-007
+  - UC-009
+  - UC-003
+dependencies:
+  calls: []
+  called_by: []
+spec_hash: a667ab84ef6af1f720eec209d9dc2ba0c48ae6e1842db170c50b36271febe32d
+contract_hashes:
+  Member: 575d8cd3695658f2609cfb651651a3543298ef907aa5ba3b1a3b7bc092dab01d
+  Error: a3b97a5bfa4d8d9c2910984b630f3bb5252903dbd3ce13dedbdbba7b3424bc44
+endpoint: POST /api/registrations/{registrationId}/approve
+entities:
+  - registration
+  - family-member

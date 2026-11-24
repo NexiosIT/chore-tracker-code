@@ -1,0 +1,151 @@
+# =============================================================================
+# API Contract — UC-007-list-pending-registrations
+# =============================================================================
+# Conformance convention:
+# - Schemas describe the UNWRAPPED body, in **camelCase**:
+#     success response → the `data` payload   ·   error response → the `error` body.
+#   The `{ data, error, meta }` envelope (STD-001) and the snake_case wire
+#   representation (STD-010) are applied UNIFORMLY by the service — do NOT
+#   model the envelope or snake_case here.
+# - Code-to-contract conformance (STD-024) unwraps the envelope and validates
+#   the body against these schemas, projecting camelCase → snake_case on the
+#   schema (oracle) side. Author every field in camelCase.
+# - Shared schemas (Member, SessionStarted, Error) are defined identically in
+#   every family contract that uses them.
+# =============================================================================
+
+openapi: "3.0.3"
+info:
+  title: "List pending registrations"
+  version: "1.0.0"
+
+paths:
+  /api/registrations/pending:
+    get:
+      operationId: listPendingRegistrations
+      summary: List every pending kid registration, oldest first, with the pending count.
+      tags:
+        - family
+      security:
+        - sessionToken: []
+      responses:
+        "200":
+          description: Pending registrations, ordered by requestedAt then username.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PendingRegistrations"
+        "401":
+          description: >-
+            No session token, or the session has ended through logout, a password change, a password
+            reset or a deactivation (code AUTHENTICATION_REQUIRED). The app shows the Login screen.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: AUTHENTICATION_REQUIRED
+                message: Your session has ended. Log in again.
+        "403":
+          description: The caller is a kid, not a parent (code AUTHORIZATION_PARENT_ONLY).
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              example:
+                code: AUTHORIZATION_PARENT_ONLY
+                message: Only a parent can do this.
+
+components:
+  securitySchemes:
+    sessionToken:
+      type: http
+      scheme: bearer
+      description: Opaque session token returned by found-family or log-in.
+  schemas:
+    PendingRegistrations:
+      type: object
+      required:
+        - count
+        - registrations
+      properties:
+        count:
+          type: integer
+          minimum: 0
+          description: Number of pending registrations; the app shows it as a badge when above 0.
+          example: 2
+        registrations:
+          type: array
+          items:
+            $ref: "#/components/schemas/Registration"
+
+    Registration:
+      type: object
+      required:
+        - id
+        - username
+        - displayName
+        - status
+        - requestedAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 2b9e4c1a-6d3f-4a8b-9c2e-5f1d7a3b8e40
+        username:
+          type: string
+          description: Requested login name as typed.
+          example: Roos_K
+        displayName:
+          type: string
+          example: Roos
+        status:
+          type: string
+          enum:
+            - pending
+            - approved
+            - rejected
+          example: pending
+        requestedAt:
+          type: string
+          format: date-time
+          example: "2026-11-23T16:05:00Z"
+
+    Error:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: Machine-readable error code (SCREAMING_SNAKE_CASE — STD-002).
+          example: VALIDATION_FAILED
+        message:
+          type: string
+          description: Human-readable message, safe to display to end users.
+          example: Some fields need attention.
+        retryAt:
+          type: string
+          format: date-time
+          description: When a locked-out username may try again (only with code RATE_LIMIT_LOGIN_LOCKED).
+          example: "2026-11-23T14:32:00Z"
+        details:
+          type: array
+          description: Field-level validation errors (HTTP 400 — STD-001 Rule 8).
+          items:
+            type: object
+            required:
+              - field
+              - rule
+              - message
+            properties:
+              field:
+                type: string
+                example: username
+              rule:
+                type: string
+                example: length
+              message:
+                type: string
+                example: Username needs 3 to 20 characters
