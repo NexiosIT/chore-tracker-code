@@ -1,0 +1,176 @@
+id: SCR-005
+name: Pending registrations
+slug: pending-registrations
+app: chore-tracker
+domain: family
+route: /registrations/pending
+status: draft
+version: 1.0.0
+description: Parent list of pending kid registrations, oldest first, where each can be approved or rejected.
+sections:
+  - name: pending-list
+    use_case_ref: specs/family/UC-007-list-pending-registrations
+    aspect: list
+    load_trigger: page-load
+    component_tree:
+      component:
+        name: PendingList
+        type: list
+        tokens:
+          padding: spacing-md
+          gap: spacing-sm
+          background: color-surface
+        props:
+          items: registrations
+          empty_text: No registrations are waiting.
+        children:
+          - name: PendingTitle
+            type: heading
+            tokens:
+              color: color-text
+            props:
+              text: Registrations waiting for you
+          - name: RegistrationCard
+            type: card
+            tokens:
+              padding: spacing-md
+              gap: spacing-sm
+              radius: radius-card
+              border: color-border
+              background: color-surface
+            children:
+              - name: DisplayName
+                type: text
+                tokens:
+                  color: color-text
+                props:
+                  field: displayName
+              - name: Username
+                type: text
+                tokens:
+                  color: color-text-muted
+                props:
+                  field: username
+              - name: RequestedAt
+                type: text
+                tokens:
+                  color: color-text-muted
+                props:
+                  field: requestedAt
+                  format: relative date, for example "Requested 2 days ago"
+  - name: approve-action
+    use_case_ref: specs/family/UC-008-approve-registration
+    aspect: card
+    load_trigger: user-action
+    trigger_details:
+      action: click
+      target: ApproveButton
+      label: Approve registration of {displayName}
+    component_tree:
+      component:
+        name: ApproveButton
+        type: button
+        tokens:
+          padding: spacing-sm
+        props:
+          variant: primary
+          label: Approve
+          path_param: registrationId from the card's registration id
+  - name: reject-action
+    use_case_ref: specs/family/UC-009-reject-registration
+    aspect: card
+    load_trigger: user-action
+    trigger_details:
+      action: click
+      target: RejectButton
+      label: Reject registration of {displayName}
+    component_tree:
+      component:
+        name: RejectDialog
+        type: modal
+        tokens:
+          padding: spacing-lg
+          gap: spacing-md
+        children:
+          - name: RejectQuestion
+            type: text
+            tokens:
+              color: color-text
+            props:
+              template: Reject {displayName}? They can register again with the same username.
+          - name: ConfirmRejectButton
+            type: button
+            tokens:
+              padding: spacing-sm
+            props:
+              variant: danger
+              label: Reject
+              path_param: registrationId from the card's registration id
+          - name: CancelRejectButton
+            type: button
+            tokens:
+              padding: spacing-sm
+            props:
+              variant: ghost
+              label: Cancel
+orchestration:
+  - source: approve-action
+    on_success:
+      - target: pending-list
+        action: refresh
+      - target: null
+        action: notify
+        params:
+          type: toast
+          variant: success
+          message: Approved. They can log in now.
+          duration_ms: 3000
+    on_error:
+      - target: pending-list
+        action: refresh
+      - target: null
+        action: notify
+        params:
+          type: toast
+          variant: error
+          message: This registration was already decided.
+          duration_ms: 4000
+  - source: reject-action
+    on_success:
+      - target: pending-list
+        action: refresh
+      - target: null
+        action: notify
+        params:
+          type: toast
+          variant: success
+          message: Registration rejected.
+          duration_ms: 3000
+    on_error:
+      - target: pending-list
+        action: refresh
+      - target: null
+        action: notify
+        params:
+          type: toast
+          variant: error
+          message: This registration was already decided.
+          duration_ms: 4000
+  - source: pending-list
+    on_error:
+      - target: null
+        action: navigate
+        params:
+          route: /login
+          when: error code is AUTHENTICATION_REQUIRED
+          clears_session_token: true
+          replace: true
+responsive:
+  - breakpoint: mobile
+    changes:
+      - section: pending-list
+        action: stack
+  - breakpoint: tablet
+    changes:
+      - section: pending-list
+        action: stack

@@ -1,0 +1,20 @@
+# =============================================================================
+# Design System — chore-tracker component inventory   (P2)
+# =============================================================================
+# Per-app inventory. EXTENDS _base. Add components whose very STRUCTURE is
+# app-specific (e.g. a platform `data-grid`, a marketing `pricing-table`).
+# Universal components (button, modal, toast, …) live in _base — don't redeclare
+# them here. Resolution for this app's screens: app ∪ _base (app wins).
+# =============================================================================
+
+version: 1
+layer: chore-tracker
+extends: _base
+
+components:
+  # Empty by default — this app inherits every _base component.
+  # Add app-specific components here, e.g.:
+  # data-grid:
+  #   description: "Dense, sortable/filterable data grid."
+  #   contract: STD-012
+  #   impl: { kind: dependency, package: "@tanstack/react-table" }

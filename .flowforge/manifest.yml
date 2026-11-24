@@ -1,5 +1,5 @@
 manifest_schema_version: 2
-service: chore-tracker-api
+service: chore-tracker-app
 feature:
   id: FT-001
   name: Family Accounts
@@ -28,8 +28,19 @@ generation_strategy:
       description: Infrastructure-as-code, CI/CD configuration, deployment manifests
   max_retries: 2
 specs:
+  - id: UC-002
+    kind: upstream_dependency
+    action: create
+    path: specs/family/UC-002-get-family-status
+    files:
+      meta.yml: specs/family/UC-002-get-family-status/meta.yml
+      scenarios.feature: specs/family/UC-002-get-family-status/scenarios.feature
+      contract.openapi.yml: specs/family/UC-002-get-family-status/contract.openapi.yml
+    service: chore-tracker-api
+    domain: family
+    spec_hash: 8b93131a5dc36c7f739bf6dd52b9b3f5684b7e1858b28095bd02137da0e11527
   - id: UC-001
-    kind: owned
+    kind: upstream_dependency
     action: create
     path: specs/family/UC-001-found-family
     files:
@@ -41,19 +52,8 @@ specs:
     service: chore-tracker-api
     domain: family
     spec_hash: 7a07d943c24af5ad411821658e03a11141e3760851aa39a35d2f222c23951655
-  - id: UC-002
-    kind: owned
-    action: create
-    path: specs/family/UC-002-get-family-status
-    files:
-      meta.yml: specs/family/UC-002-get-family-status/meta.yml
-      scenarios.feature: specs/family/UC-002-get-family-status/scenarios.feature
-      contract.openapi.yml: specs/family/UC-002-get-family-status/contract.openapi.yml
-    service: chore-tracker-api
-    domain: family
-    spec_hash: 8b93131a5dc36c7f739bf6dd52b9b3f5684b7e1858b28095bd02137da0e11527
   - id: UC-003
-    kind: owned
+    kind: upstream_dependency
     action: create
     path: specs/family/UC-003-log-in
     files:
@@ -66,30 +66,8 @@ specs:
     service: chore-tracker-api
     domain: family
     spec_hash: 98803d30374483598104ab68441565eec45f608d821cb07dba8d859524d6d54b
-  - id: UC-004
-    kind: owned
-    action: create
-    path: specs/family/UC-004-log-out
-    files:
-      meta.yml: specs/family/UC-004-log-out/meta.yml
-      scenarios.feature: specs/family/UC-004-log-out/scenarios.feature
-      contract.openapi.yml: specs/family/UC-004-log-out/contract.openapi.yml
-    service: chore-tracker-api
-    domain: family
-    spec_hash: a80048a6c052459bb1b8a81824f9b61d30d1951023bff22b436476c49f1c2b92
-  - id: UC-005
-    kind: owned
-    action: create
-    path: specs/family/UC-005-get-current-member
-    files:
-      meta.yml: specs/family/UC-005-get-current-member/meta.yml
-      scenarios.feature: specs/family/UC-005-get-current-member/scenarios.feature
-      contract.openapi.yml: specs/family/UC-005-get-current-member/contract.openapi.yml
-    service: chore-tracker-api
-    domain: family
-    spec_hash: da822ab17c46da312929e918b13445930f7115673b7a2a92e71f80641136d551
   - id: UC-006
-    kind: owned
+    kind: upstream_dependency
     action: create
     path: specs/family/UC-006-register-kid
     files:
@@ -101,8 +79,19 @@ specs:
     service: chore-tracker-api
     domain: family
     spec_hash: c3ba2d77f20405dcafb53ed89e4d07cff4ab2deb7f04e5d4c560e1b066ee8be2
+  - id: UC-005
+    kind: upstream_dependency
+    action: create
+    path: specs/family/UC-005-get-current-member
+    files:
+      meta.yml: specs/family/UC-005-get-current-member/meta.yml
+      scenarios.feature: specs/family/UC-005-get-current-member/scenarios.feature
+      contract.openapi.yml: specs/family/UC-005-get-current-member/contract.openapi.yml
+    service: chore-tracker-api
+    domain: family
+    spec_hash: da822ab17c46da312929e918b13445930f7115673b7a2a92e71f80641136d551
   - id: UC-007
-    kind: owned
+    kind: upstream_dependency
     action: create
     path: specs/family/UC-007-list-pending-registrations
     files:
@@ -112,8 +101,19 @@ specs:
     service: chore-tracker-api
     domain: family
     spec_hash: 82e31f7f563be991bec8e4ff74dabad8113907196368f1f5b7d3be4c2892128c
+  - id: UC-004
+    kind: upstream_dependency
+    action: create
+    path: specs/family/UC-004-log-out
+    files:
+      meta.yml: specs/family/UC-004-log-out/meta.yml
+      scenarios.feature: specs/family/UC-004-log-out/scenarios.feature
+      contract.openapi.yml: specs/family/UC-004-log-out/contract.openapi.yml
+    service: chore-tracker-api
+    domain: family
+    spec_hash: a80048a6c052459bb1b8a81824f9b61d30d1951023bff22b436476c49f1c2b92
   - id: UC-008
-    kind: owned
+    kind: upstream_dependency
     action: create
     path: specs/family/UC-008-approve-registration
     files:
@@ -126,7 +126,7 @@ specs:
     domain: family
     spec_hash: a667ab84ef6af1f720eec209d9dc2ba0c48ae6e1842db170c50b36271febe32d
   - id: UC-009
-    kind: owned
+    kind: upstream_dependency
     action: create
     path: specs/family/UC-009-reject-registration
     files:
@@ -138,44 +138,8 @@ specs:
     service: chore-tracker-api
     domain: family
     spec_hash: bbd87b5292d7e922ede370dfc7a62d4bd2aa71dda4f95f7d5ff95b7cff51f47f
-  - id: UC-010
-    kind: owned
-    action: create
-    path: specs/family/UC-010-add-parent
-    files:
-      meta.yml: specs/family/UC-010-add-parent/meta.yml
-      scenarios.feature: specs/family/UC-010-add-parent/scenarios.feature
-      contract.openapi.yml: specs/family/UC-010-add-parent/contract.openapi.yml
-      constraints.md: specs/family/UC-010-add-parent/constraints.md
-    service: chore-tracker-api
-    domain: family
-    spec_hash: 07964cc8b8914263a94e125f04d5f3f3260f2c3ec918aca83bbef1ba077a591c
-  - id: UC-011
-    kind: owned
-    action: create
-    path: specs/family/UC-011-change-own-password
-    files:
-      meta.yml: specs/family/UC-011-change-own-password/meta.yml
-      scenarios.feature: specs/family/UC-011-change-own-password/scenarios.feature
-      contract.openapi.yml: specs/family/UC-011-change-own-password/contract.openapi.yml
-      constraints.md: specs/family/UC-011-change-own-password/constraints.md
-    service: chore-tracker-api
-    domain: family
-    spec_hash: 2f5628581337ee0619acb02d2e79cee3f31b766e017fe448182b74ee6b5b306d
-  - id: UC-012
-    kind: owned
-    action: create
-    path: specs/family/UC-012-reset-member-password
-    files:
-      meta.yml: specs/family/UC-012-reset-member-password/meta.yml
-      scenarios.feature: specs/family/UC-012-reset-member-password/scenarios.feature
-      contract.openapi.yml: specs/family/UC-012-reset-member-password/contract.openapi.yml
-      constraints.md: specs/family/UC-012-reset-member-password/constraints.md
-    service: chore-tracker-api
-    domain: family
-    spec_hash: 304fec42b1f05ca3f0b4a9967fbdc808bb962be5a43512721a89a6a6970e4428
   - id: UC-013
-    kind: owned
+    kind: upstream_dependency
     action: create
     path: specs/family/UC-013-list-members
     files:
@@ -186,7 +150,7 @@ specs:
     domain: family
     spec_hash: 4590ce5d575f13da26eed3021948705b4fd7fa66e41a2d35179503cf4acac13b
   - id: UC-014
-    kind: owned
+    kind: upstream_dependency
     action: create
     path: specs/family/UC-014-deactivate-member
     files:
@@ -199,7 +163,7 @@ specs:
     domain: family
     spec_hash: 2adb26375866d28690180f7e6f036fbf75e6b70ad66c325221d660f18dfbf437
   - id: UC-015
-    kind: owned
+    kind: upstream_dependency
     action: create
     path: specs/family/UC-015-reactivate-member
     files:
@@ -210,16 +174,84 @@ specs:
     service: chore-tracker-api
     domain: family
     spec_hash: 04ca89fee95a7fad6e3c3156e254c0e9a14e3f8917491e9470f202b5637982e8
-screens: []
+  - id: UC-012
+    kind: upstream_dependency
+    action: create
+    path: specs/family/UC-012-reset-member-password
+    files:
+      meta.yml: specs/family/UC-012-reset-member-password/meta.yml
+      scenarios.feature: specs/family/UC-012-reset-member-password/scenarios.feature
+      contract.openapi.yml: specs/family/UC-012-reset-member-password/contract.openapi.yml
+      constraints.md: specs/family/UC-012-reset-member-password/constraints.md
+    service: chore-tracker-api
+    domain: family
+    spec_hash: 304fec42b1f05ca3f0b4a9967fbdc808bb962be5a43512721a89a6a6970e4428
+  - id: UC-010
+    kind: upstream_dependency
+    action: create
+    path: specs/family/UC-010-add-parent
+    files:
+      meta.yml: specs/family/UC-010-add-parent/meta.yml
+      scenarios.feature: specs/family/UC-010-add-parent/scenarios.feature
+      contract.openapi.yml: specs/family/UC-010-add-parent/contract.openapi.yml
+      constraints.md: specs/family/UC-010-add-parent/constraints.md
+    service: chore-tracker-api
+    domain: family
+    spec_hash: 07964cc8b8914263a94e125f04d5f3f3260f2c3ec918aca83bbef1ba077a591c
+  - id: UC-011
+    kind: upstream_dependency
+    action: create
+    path: specs/family/UC-011-change-own-password
+    files:
+      meta.yml: specs/family/UC-011-change-own-password/meta.yml
+      scenarios.feature: specs/family/UC-011-change-own-password/scenarios.feature
+      contract.openapi.yml: specs/family/UC-011-change-own-password/contract.openapi.yml
+      constraints.md: specs/family/UC-011-change-own-password/constraints.md
+    service: chore-tracker-api
+    domain: family
+    spec_hash: 2f5628581337ee0619acb02d2e79cee3f31b766e017fe448182b74ee6b5b306d
+screens:
+  - id: SCR-001
+    action: create
+    path: screens/chore-tracker/family/SCR-001-setup.yml
+    app: chore-tracker
+    spec_hash: 29dd93c328aca9912e9534b49989dd5c63c0d1c7135b40fe1952f3878453a3fa
+  - id: SCR-002
+    action: create
+    path: screens/chore-tracker/family/SCR-002-login.yml
+    app: chore-tracker
+    spec_hash: c7bd551c106806cc1f5d6bbb01cdd5e56e6ae955e0b558475a8a21996ecf366a
+  - id: SCR-003
+    action: create
+    path: screens/chore-tracker/family/SCR-003-kid-registration.yml
+    app: chore-tracker
+    spec_hash: 0aa5b3a07e9a5b4575768a91c8a6d9a3890354868e5749ff8bd930d113d50b5c
+  - id: SCR-004
+    action: create
+    path: screens/chore-tracker/family/SCR-004-home.yml
+    app: chore-tracker
+    spec_hash: f4ce507b66f937e88246b861696aba9a3d8e0b34a3adbc5ca22deb44dbad4c74
+  - id: SCR-005
+    action: create
+    path: screens/chore-tracker/family/SCR-005-pending-registrations.yml
+    app: chore-tracker
+    spec_hash: 7a74ee5645d1bd03f26ba2cc6832df7f382da11adc0bb4e95957e0d07c18aa64
+  - id: SCR-006
+    action: create
+    path: screens/chore-tracker/family/SCR-006-members.yml
+    app: chore-tracker
+    spec_hash: 2b43e34513aaeaaa389bcd2d7ff642458e524c7b6d8ad1a885084b57823f4ac5
+  - id: SCR-007
+    action: create
+    path: screens/chore-tracker/family/SCR-007-add-parent.yml
+    app: chore-tracker
+    spec_hash: 86472bdb7de2cfdbb37ff95b44b189c60759dca680892bacdf594e8e5a8a88cd
+  - id: SCR-008
+    action: create
+    path: screens/chore-tracker/family/SCR-008-change-password.yml
+    app: chore-tracker
+    spec_hash: cbd6170c9940c3f01f1a608ba68c9289a9e412f41eaa8b458f126082e47616c1
 standards:
-  - id: STD-001
-    name: API Response Envelope
-    category: api
-    path: standards/api/response-envelope.md
-  - id: STD-002
-    name: Error Handling Strategy
-    category: api
-    path: standards/api/error-handling.md
   - id: STD-003
     name: Naming Conventions
     category: general
@@ -228,22 +260,6 @@ standards:
     name: Performance Budgets
     category: nfr
     path: standards/nfr/performance-budgets.md
-  - id: STD-006
-    name: Service Layer Pattern
-    category: spring-boot
-    path: standards/spring-boot/STD-006-service-layer.md
-  - id: STD-007
-    name: Controller Endpoint Pattern
-    category: spring-boot
-    path: standards/spring-boot/STD-007-controller-endpoint.md
-  - id: STD-008
-    name: Entity & Repository Pattern
-    category: spring-boot
-    path: standards/spring-boot/STD-008-entity-repository.md
-  - id: STD-009
-    name: Test Patterns
-    category: spring-boot
-    path: standards/spring-boot/STD-009-test-patterns.md
   - id: STD-017
     name: No Magic Values
     category: general
@@ -260,14 +276,23 @@ standards:
     name: Service README
     category: general
     path: standards/general/STD-020-service-readme.md
-  - id: STD-024
-    name: Code-to-Contract Conformance
-    category: api
-    path: standards/api/STD-024-contract-conformance.md
   - id: STD-035
     name: Scenario-Key Test Binding
     category: general
     path: standards/general/STD-035-scenario-key-binding.md
+  - id: STD-043
+    name: Flutter App Foundations
+    category: flutter
+    path: standards/flutter/STD-043-flutter-app-foundations.md
+design_system:
+  app: chore-tracker
+  layers:
+    - design-system/_base/tokens.yml
+    - design-system/chore-tracker/tokens.yml
+  inventory:
+    - design-system/_base/inventory.yml
+    - design-system/chore-tracker/inventory.yml
+mockup_reference: features/briefs/family-accounts/draft-screens.md
 code_repos:
   - service: chore-tracker-api
     expected_remote: https://github.com/NexiosIT/chore-tracker-code.git

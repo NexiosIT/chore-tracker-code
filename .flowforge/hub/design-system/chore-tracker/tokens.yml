@@ -1,0 +1,20 @@
+# =============================================================================
+# Design System — chore-tracker theme
+# =============================================================================
+# Per-app theme. EXTENDS _base. May ADD or OVERRIDE semantic tokens only —
+# never primitives (those live in _base). Resolution for this app's screens:
+# look here first, then fall back to _base (app ∪ _base, app wins).
+#
+#   _base owns a component's CONTRACT (props + a11y); apps own its LOOK
+#   (the token values).
+# =============================================================================
+
+version: 1
+layer: chore-tracker
+extends: _base
+
+semantic:
+  # Empty by default — this app inherits every _base semantic token as-is.
+  # Add or override semantic tokens here (never primitives). Uncomment to start:
+  # color-primary: "{primitives.color.gray-900}"   # this app's primary
+  # spacing-md:    "{primitives.scale.space.sm}"    # override _base for a denser feel

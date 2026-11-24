@@ -1,0 +1,123 @@
+id: SCR-002
+name: Login
+slug: login
+app: chore-tracker
+domain: family
+route: /login
+status: draft
+version: 1.0.0
+description: Entry screen once the family exists, where a family member logs in, with a link to kid registration.
+sections:
+  - name: family-status
+    use_case_ref: specs/family/UC-002-get-family-status
+    aspect: summary
+    load_trigger: page-load
+    component_tree:
+      component:
+        name: LoginIntro
+        type: container
+        tokens:
+          padding: spacing-lg
+          background: color-surface
+        children:
+          - name: LoginTitle
+            type: heading
+            tokens:
+              color: color-text
+            props:
+              text: Log in
+  - name: login-form
+    use_case_ref: specs/family/UC-003-log-in
+    aspect: form
+    load_trigger: page-load
+    component_tree:
+      component:
+        name: LoginForm
+        type: form
+        tokens:
+          padding: spacing-lg
+          gap: spacing-md
+          background: color-surface
+        children:
+          - name: UsernameField
+            type: form-field
+            tokens:
+              border: color-border
+              radius: radius-card
+            props:
+              field: username
+              label: Username
+              autofill: username
+          - name: PasswordField
+            type: form-field
+            tokens:
+              border: color-border
+              radius: radius-card
+            props:
+              field: password
+              label: Password
+              input: password
+          - name: LoginError
+            type: inline
+            tokens:
+              gap: spacing-sm
+            props:
+              variant: error
+              source: error.message
+              retry_at: shown as local time from error.retryAt when code is RATE_LIMIT_LOGIN_LOCKED, for example "Try again at 14:32"
+          - name: LoginButton
+            type: button
+            tokens:
+              padding: spacing-md
+            props:
+              variant: primary
+              label: Log in
+              submits: true
+          - name: RegisterLink
+            type: button
+            tokens:
+              padding: spacing-sm
+            props:
+              variant: ghost
+              label: New here? Register as a kid
+              navigates_to: /register
+orchestration:
+  - source: family-status
+    on_success:
+      - target: null
+        action: navigate
+        params:
+          route: /setup
+          when: familyExists is false
+          replace: true
+    on_error:
+      - target: null
+        action: notify
+        params:
+          type: banner
+          variant: error
+          message: Something went wrong. Try again later.
+  - source: login-form
+    on_success:
+      - target: null
+        action: navigate
+        params:
+          route: /home
+          replace: true
+          stores_session_token: true
+    on_error:
+      - target: login-form
+        action: notify
+        params:
+          type: inline
+          variant: error
+          message: Username or password incorrect
+responsive:
+  - breakpoint: mobile
+    changes:
+      - section: login-form
+        action: stack
+  - breakpoint: tablet
+    changes:
+      - section: login-form
+        action: stack

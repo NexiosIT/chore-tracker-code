@@ -1,0 +1,114 @@
+id: SCR-003
+name: Kid registration
+slug: kid-registration
+app: chore-tracker
+domain: family
+route: /register
+status: draft
+version: 1.0.0
+description: A kid requests an account and is told that a parent must approve it before they can log in.
+sections:
+  - name: registration-form
+    use_case_ref: specs/family/UC-006-register-kid
+    aspect: form
+    load_trigger: page-load
+    component_tree:
+      component:
+        name: RegistrationForm
+        type: form
+        tokens:
+          padding: spacing-lg
+          gap: spacing-md
+          background: color-surface
+        children:
+          - name: RegistrationTitle
+            type: heading
+            tokens:
+              color: color-text
+            props:
+              text: Create your account
+          - name: UsernameField
+            type: form-field
+            tokens:
+              border: color-border
+              radius: radius-card
+            props:
+              field: username
+              label: Username
+              helper: 3 to 20 letters, digits or underscores
+          - name: DisplayNameField
+            type: form-field
+            tokens:
+              border: color-border
+              radius: radius-card
+            props:
+              field: displayName
+              label: Display name
+              helper: How the family sees you
+          - name: PasswordField
+            type: form-field
+            tokens:
+              border: color-border
+              radius: radius-card
+            props:
+              field: password
+              label: Password
+              input: password
+              helper: At least 8 characters
+          - name: FieldErrors
+            type: inline
+            tokens:
+              gap: spacing-sm
+            props:
+              variant: error
+              source: error.details
+              placement: under each field named in error.details[].field; error.message under the username for CONFLICT_USERNAME_TAKEN
+          - name: RegisterButton
+            type: button
+            tokens:
+              padding: spacing-md
+            props:
+              variant: primary
+              label: Register
+              submits: true
+          - name: BackToLogin
+            type: button
+            tokens:
+              padding: spacing-sm
+            props:
+              variant: ghost
+              label: Back to log in
+              navigates_to: /login
+          - name: PendingConfirmation
+            type: banner
+            tokens:
+              padding: spacing-md
+            props:
+              variant: info
+              visible_when: registration created
+              text: A parent must approve your account before you can log in.
+orchestration:
+  - source: registration-form
+    on_success:
+      - target: registration-form
+        action: notify
+        params:
+          type: banner
+          variant: info
+          message: A parent must approve your account before you can log in.
+    on_error:
+      - target: registration-form
+        action: notify
+        params:
+          type: inline
+          variant: error
+          message: Some fields need attention.
+responsive:
+  - breakpoint: mobile
+    changes:
+      - section: registration-form
+        action: stack
+  - breakpoint: tablet
+    changes:
+      - section: registration-form
+        action: stack

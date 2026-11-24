@@ -1,0 +1,156 @@
+id: SCR-004
+name: Home
+slug: home
+app: chore-tracker
+domain: family
+route: /home
+status: draft
+version: 1.0.0
+description: First screen after login with the member's greeting, the pending-registration badge and family links for parents, and change password and log out for everyone; role content comes in later features.
+sections:
+  - name: current-member
+    use_case_ref: specs/family/UC-005-get-current-member
+    aspect: summary
+    load_trigger: page-load
+    component_tree:
+      component:
+        name: MemberHeader
+        type: container
+        tokens:
+          padding: spacing-lg
+          gap: spacing-sm
+          background: color-surface
+        children:
+          - name: Greeting
+            type: heading
+            tokens:
+              color: color-text
+            props:
+              field: displayName
+              template: Hi {displayName}
+          - name: RoleLabel
+            type: badge
+            tokens:
+              padding: spacing-sm
+            props:
+              field: role
+              variant: neutral
+          - name: ChangePasswordLink
+            type: button
+            tokens:
+              padding: spacing-sm
+            props:
+              variant: ghost
+              label: Change password
+              navigates_to: /account/password
+  - name: family-admin
+    use_case_ref: specs/family/UC-007-list-pending-registrations
+    aspect: summary
+    load_trigger: page-load
+    component_tree:
+      component:
+        name: FamilyAdminCard
+        type: card
+        tokens:
+          padding: spacing-md
+          gap: spacing-sm
+          background: color-surface-alt
+          radius: radius-card
+          border: color-border
+        props:
+          visible_when: role is parent
+        children:
+          - name: PendingRegistrationsLink
+            type: button
+            tokens:
+              padding: spacing-sm
+            props:
+              variant: secondary
+              label: Registrations
+              navigates_to: /registrations/pending
+          - name: PendingCountBadge
+            type: badge
+            tokens:
+              padding: spacing-sm
+            props:
+              field: count
+              variant: warning
+              visible_when: count is above 0
+          - name: MembersLink
+            type: button
+            tokens:
+              padding: spacing-sm
+            props:
+              variant: secondary
+              label: Family members
+              navigates_to: /members
+  - name: log-out
+    use_case_ref: specs/family/UC-004-log-out
+    aspect: form
+    load_trigger: user-action
+    trigger_details:
+      action: click
+      target: LogOutButton
+      label: Log out
+    component_tree:
+      component:
+        name: LogOutArea
+        type: container
+        tokens:
+          padding: spacing-lg
+        children:
+          - name: LogOutButton
+            type: button
+            tokens:
+              padding: spacing-md
+            props:
+              variant: secondary
+              label: Log out
+orchestration:
+  - source: current-member
+    on_success:
+      - target: family-admin
+        action: show
+        params:
+          when: role is parent
+    on_error:
+      - target: null
+        action: navigate
+        params:
+          route: /login
+          when: error code is AUTHENTICATION_REQUIRED
+          clears_session_token: true
+          replace: true
+  - source: family-admin
+    on_error:
+      - target: family-admin
+        action: hide
+  - source: log-out
+    on_success:
+      - target: null
+        action: navigate
+        params:
+          route: /login
+          clears_session_token: true
+          replace: true
+    on_error:
+      - target: null
+        action: navigate
+        params:
+          route: /login
+          clears_session_token: true
+          replace: true
+responsive:
+  - breakpoint: mobile
+    changes:
+      - section: current-member
+        action: stack
+      - section: family-admin
+        action: stack
+      - section: log-out
+        action: reorder
+        position: 3
+  - breakpoint: tablet
+    changes:
+      - section: family-admin
+        action: stack

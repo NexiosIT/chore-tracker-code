@@ -1,0 +1,73 @@
+# =============================================================================
+# Design System — _base component inventory   (P2)
+# =============================================================================
+# The allowed components/primitives a screen may reference, and HOW each is
+# realized. The engine BINDS to this — it never guesses a realization.
+#
+#   key            the component type, referenced by `component_tree` `type:`
+#                  and by `orchestration.notify.params.type`.
+#   variants[]     allowed variant names (a reference's variant must be one).
+#   impl           the build-vs-buy decision, made ONCE, as data:
+#                    kind: custom      -> engine generates ONE shared module
+#                                         (module:) per a code-pattern (pattern:),
+#                                         reused by every feature.
+#                    kind: dependency  -> engine installs + wires (package:).
+#                                         A USED dep — STD-018-compliant.
+#                  Absent impl -> rendered from design tokens (custom, no module).
+#   contract       the standard that defines behaviour/a11y/defaults. Referenced,
+#                  never duplicated here (single source — Rule 8).
+#
+# A screen that references a type NOT declared here fails the design-system
+# reference check (Iron Dome). To add one: shaping STOPS and asks,
+# then records a change request (a new entry + its impl) — it is never invented
+# at generate-time (fix-upstream).
+#
+# This is a NEUTRAL skeleton. Component CONTRACTS are universal and live here;
+# per-app LOOK lives in each app's tokens. Edit `impl` to your stack's decision.
+# =============================================================================
+
+version: 1
+layer: _base
+
+components:
+  # --- layout / structure (rendered from tokens) -----------------------------
+  container: { description: "Generic layout box / section wrapper." }
+  card:      { description: "Bounded content surface." }
+  list:      { description: "Repeated collection of items." }
+  detail:    { description: "Single-record detail view." }
+  table:     { description: "Tabular data. Interactive — keep behaviour identical across features." }
+
+  # --- text / media (rendered from tokens) -----------------------------------
+  heading: { description: "Section/page title." }
+  text:    { description: "Body copy / inline text." }
+  media:   { description: "Image / video / icon surface." }
+  badge:   { description: "Small status/label chip.", variants: [neutral, success, warning, error, info] }
+  rating:  { description: "Star / score display." }
+
+  # --- input / interactive ----------------------------------------------------
+  button:     { description: "Action trigger.", variants: [primary, secondary, ghost, danger] }
+  form:       { description: "Form container." }
+  form-field: { description: "Labelled input with validation/error state." }
+  combobox:   { description: "Typeahead select. Interactive — behaviour/a11y must be identical across features." }
+  modal:      { description: "Overlay dialog. Mounted once at the app root; a11y (focus trap, ESC) must be identical across features." }
+
+  # --- feedback surfaces (the `notify` action targets these) ------------------
+  toast:
+    description: "Transient, auto-dismissing notification. Mounted once at the app root."
+    variants: [success, error, info, warning]
+    contract: STD-012           # behaviour / API / a11y / default duration
+    impl:
+      kind: custom              # one shared module, generated once, reused everywhere
+      module: "@/lib/toast"
+      pattern: STD-012
+      # --- to use a library instead, replace the block above with: ---
+      # kind: dependency
+      # package: "sonner"
+
+  inline:
+    description: "Feedback bound to a specific field/section (e.g. a form error)."
+    variants: [success, error, info, warning]
+
+  banner:
+    description: "Persistent page-level notice."
+    variants: [success, error, info, warning]

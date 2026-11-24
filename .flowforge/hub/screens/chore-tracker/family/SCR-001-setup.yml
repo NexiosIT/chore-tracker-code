@@ -1,0 +1,148 @@
+id: SCR-001
+name: Setup
+slug: setup
+app: chore-tracker
+domain: family
+route: /setup
+status: draft
+version: 1.0.0
+description: Entry screen on a fresh install where the first parent founds the family; offered only while no family exists.
+sections:
+  - name: family-status
+    use_case_ref: specs/family/UC-002-get-family-status
+    aspect: summary
+    load_trigger: page-load
+    component_tree:
+      component:
+        name: SetupIntro
+        type: container
+        tokens:
+          padding: spacing-lg
+          background: color-surface
+        children:
+          - name: SetupTitle
+            type: heading
+            tokens:
+              color: color-text
+            props:
+              text: Set up your family
+          - name: SetupExplanation
+            type: text
+            tokens:
+              color: color-text-muted
+            props:
+              text: You become the family's first parent. Kids register themselves later, and you approve them.
+  - name: setup-form
+    use_case_ref: specs/family/UC-001-found-family
+    aspect: form
+    load_trigger: page-load
+    component_tree:
+      component:
+        name: SetupForm
+        type: form
+        tokens:
+          padding: spacing-lg
+          gap: spacing-md
+          background: color-surface
+        children:
+          - name: UsernameField
+            type: form-field
+            tokens:
+              border: color-border
+              radius: radius-card
+            props:
+              field: username
+              label: Username
+              helper: 3 to 20 letters, digits or underscores
+              autofill: username
+          - name: DisplayNameField
+            type: form-field
+            tokens:
+              border: color-border
+              radius: radius-card
+            props:
+              field: displayName
+              label: Display name
+              helper: How the family sees you, for example Mama
+          - name: PasswordField
+            type: form-field
+            tokens:
+              border: color-border
+              radius: radius-card
+            props:
+              field: password
+              label: Password
+              input: password
+              helper: At least 8 characters
+          - name: ParentConfirmation
+            type: form-field
+            tokens:
+              color: color-text
+            props:
+              field: parentConfirmed
+              input: checkbox
+              label: I am a parent setting up this family
+          - name: FieldErrors
+            type: inline
+            tokens:
+              gap: spacing-sm
+            props:
+              variant: error
+              source: error.details
+              placement: under each field named in error.details[].field, showing error.details[].message
+          - name: CreateFamilyButton
+            type: button
+            tokens:
+              padding: spacing-md
+            props:
+              variant: primary
+              label: Create family
+              submits: true
+orchestration:
+  - source: family-status
+    on_success:
+      - target: null
+        action: navigate
+        params:
+          route: /login
+          when: familyExists is true
+          replace: true
+    on_error:
+      - target: null
+        action: notify
+        params:
+          type: banner
+          variant: error
+          message: Something went wrong. Try again later.
+  - source: setup-form
+    on_success:
+      - target: null
+        action: navigate
+        params:
+          route: /home
+          replace: true
+          stores_session_token: true
+    on_error:
+      - target: setup-form
+        action: notify
+        params:
+          type: inline
+          variant: error
+          message: Some fields need attention.
+      - target: null
+        action: navigate
+        params:
+          route: /login
+          when: error code is CONFLICT_FAMILY_EXISTS
+          replace: true
+responsive:
+  - breakpoint: mobile
+    changes:
+      - section: family-status
+        action: stack
+      - section: setup-form
+        action: stack
+  - breakpoint: tablet
+    changes:
+      - section: setup-form
+        action: stack

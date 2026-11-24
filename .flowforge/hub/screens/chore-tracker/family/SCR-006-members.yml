@@ -1,0 +1,273 @@
+id: SCR-006
+name: Members
+slug: members
+app: chore-tracker
+domain: family
+route: /members
+status: draft
+version: 1.0.0
+description: Parent view of every family member with role and status, with deactivate, reactivate, a reset-password dialog and a link to add a parent.
+sections:
+  - name: members-list
+    use_case_ref: specs/family/UC-013-list-members
+    aspect: list
+    load_trigger: page-load
+    component_tree:
+      component:
+        name: MembersList
+        type: list
+        tokens:
+          padding: spacing-md
+          gap: spacing-sm
+          background: color-surface
+        props:
+          items: members
+        children:
+          - name: MembersTitle
+            type: heading
+            tokens:
+              color: color-text
+            props:
+              text: Family members
+          - name: AddParentLink
+            type: button
+            tokens:
+              padding: spacing-sm
+            props:
+              variant: secondary
+              label: Add a parent
+              navigates_to: /members/add-parent
+          - name: MemberCard
+            type: card
+            tokens:
+              padding: spacing-md
+              gap: spacing-sm
+              radius: radius-card
+              border: color-border
+              background: color-surface
+            children:
+              - name: DisplayName
+                type: text
+                tokens:
+                  color: color-text
+                props:
+                  field: displayName
+              - name: Username
+                type: text
+                tokens:
+                  color: color-text-muted
+                props:
+                  field: username
+              - name: RoleBadge
+                type: badge
+                tokens:
+                  padding: spacing-sm
+                props:
+                  field: role
+                  variant: neutral
+              - name: StatusBadge
+                type: badge
+                tokens:
+                  padding: spacing-sm
+                props:
+                  field: status
+                  variant_map:
+                    active: success
+                    deactivated: neutral
+  - name: deactivate-action
+    use_case_ref: specs/family/UC-014-deactivate-member
+    aspect: card
+    load_trigger: user-action
+    trigger_details:
+      action: click
+      target: DeactivateButton
+      label: Deactivate {displayName}
+    component_tree:
+      component:
+        name: DeactivateDialog
+        type: modal
+        tokens:
+          padding: spacing-lg
+          gap: spacing-md
+        props:
+          offered_when: member status is active
+        children:
+          - name: DeactivateQuestion
+            type: text
+            tokens:
+              color: color-text
+            props:
+              template: Deactivate {displayName}? They are logged out everywhere. Nothing is deleted, and you can reactivate them later.
+          - name: ConfirmDeactivateButton
+            type: button
+            tokens:
+              padding: spacing-sm
+            props:
+              variant: danger
+              label: Deactivate
+              path_param: memberId from the card's member id
+          - name: CancelDeactivateButton
+            type: button
+            tokens:
+              padding: spacing-sm
+            props:
+              variant: ghost
+              label: Cancel
+  - name: reactivate-action
+    use_case_ref: specs/family/UC-015-reactivate-member
+    aspect: card
+    load_trigger: user-action
+    trigger_details:
+      action: click
+      target: ReactivateButton
+      label: Reactivate {displayName}
+    component_tree:
+      component:
+        name: ReactivateButton
+        type: button
+        tokens:
+          padding: spacing-sm
+        props:
+          variant: secondary
+          label: Reactivate
+          offered_when: member status is deactivated
+          path_param: memberId from the card's member id
+  - name: reset-password-action
+    use_case_ref: specs/family/UC-012-reset-member-password
+    aspect: form
+    load_trigger: user-action
+    trigger_details:
+      action: click
+      target: ResetPasswordButton
+      label: Set a new password for {displayName}
+    component_tree:
+      component:
+        name: ResetPasswordDialog
+        type: modal
+        tokens:
+          padding: spacing-lg
+          gap: spacing-md
+        props:
+          offered_when: member is not the logged-in parent
+        children:
+          - name: ResetTitle
+            type: heading
+            tokens:
+              color: color-text
+            props:
+              template: New password for {displayName}
+          - name: NewPasswordField
+            type: form-field
+            tokens:
+              border: color-border
+              radius: radius-card
+            props:
+              field: newPassword
+              label: New password
+              input: password
+              helper: At least 8 characters. They are logged out everywhere.
+          - name: ResetFieldError
+            type: inline
+            tokens:
+              gap: spacing-sm
+            props:
+              variant: error
+              source: error.details
+          - name: ConfirmResetButton
+            type: button
+            tokens:
+              padding: spacing-sm
+            props:
+              variant: primary
+              label: Set password
+              submits: true
+              path_param: memberId from the card's member id
+          - name: CancelResetButton
+            type: button
+            tokens:
+              padding: spacing-sm
+            props:
+              variant: ghost
+              label: Cancel
+orchestration:
+  - source: deactivate-action
+    on_success:
+      - target: members-list
+        action: refresh
+      - target: null
+        action: notify
+        params:
+          type: toast
+          variant: success
+          message: Member deactivated.
+          duration_ms: 3000
+    on_error:
+      - target: null
+        action: notify
+        params:
+          type: toast
+          variant: error
+          message: The family needs at least one active parent.
+          duration_ms: 4000
+      - target: null
+        action: navigate
+        params:
+          route: /login
+          when: error code is AUTHENTICATION_REQUIRED, for example after a parent deactivated themselves
+          clears_session_token: true
+          replace: true
+  - source: reactivate-action
+    on_success:
+      - target: members-list
+        action: refresh
+      - target: null
+        action: notify
+        params:
+          type: toast
+          variant: success
+          message: Member reactivated.
+          duration_ms: 3000
+    on_error:
+      - target: members-list
+        action: refresh
+      - target: null
+        action: notify
+        params:
+          type: toast
+          variant: error
+          message: This member is already active.
+          duration_ms: 4000
+  - source: reset-password-action
+    on_success:
+      - target: null
+        action: notify
+        params:
+          type: toast
+          variant: success
+          message: New password set. They are logged out everywhere.
+          duration_ms: 3000
+    on_error:
+      - target: reset-password-action
+        action: notify
+        params:
+          type: inline
+          variant: error
+          message: Password needs at least 8 characters
+  - source: members-list
+    on_error:
+      - target: null
+        action: navigate
+        params:
+          route: /login
+          when: error code is AUTHENTICATION_REQUIRED
+          clears_session_token: true
+          replace: true
+responsive:
+  - breakpoint: mobile
+    changes:
+      - section: members-list
+        action: stack
+  - breakpoint: tablet
+    changes:
+      - section: members-list
+        action: stack

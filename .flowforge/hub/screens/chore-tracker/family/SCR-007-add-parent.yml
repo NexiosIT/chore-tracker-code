@@ -1,0 +1,102 @@
+id: SCR-007
+name: Add parent
+slug: add-parent
+app: chore-tracker
+domain: family
+route: /members/add-parent
+status: draft
+version: 1.0.0
+description: A parent creates an account for another parent, active immediately.
+sections:
+  - name: add-parent-form
+    use_case_ref: specs/family/UC-010-add-parent
+    aspect: form
+    load_trigger: page-load
+    component_tree:
+      component:
+        name: AddParentForm
+        type: form
+        tokens:
+          padding: spacing-lg
+          gap: spacing-md
+          background: color-surface
+        children:
+          - name: AddParentTitle
+            type: heading
+            tokens:
+              color: color-text
+            props:
+              text: Add a parent
+          - name: UsernameField
+            type: form-field
+            tokens:
+              border: color-border
+              radius: radius-card
+            props:
+              field: username
+              label: Username
+              helper: 3 to 20 letters, digits or underscores
+          - name: DisplayNameField
+            type: form-field
+            tokens:
+              border: color-border
+              radius: radius-card
+            props:
+              field: displayName
+              label: Display name
+          - name: PasswordField
+            type: form-field
+            tokens:
+              border: color-border
+              radius: radius-card
+            props:
+              field: password
+              label: Initial password
+              input: password
+              helper: At least 8 characters. Tell them, and they can change it later.
+          - name: FieldErrors
+            type: inline
+            tokens:
+              gap: spacing-sm
+            props:
+              variant: error
+              source: error.details
+              placement: under each field named in error.details[].field; error.message under the username for CONFLICT_USERNAME_TAKEN
+          - name: AddParentButton
+            type: button
+            tokens:
+              padding: spacing-md
+            props:
+              variant: primary
+              label: Add parent
+              submits: true
+orchestration:
+  - source: add-parent-form
+    on_success:
+      - target: null
+        action: notify
+        params:
+          type: toast
+          variant: success
+          message: Parent added. They can log in now.
+          duration_ms: 3000
+      - target: null
+        action: navigate
+        params:
+          route: /members
+    on_error:
+      - target: add-parent-form
+        action: notify
+        params:
+          type: inline
+          variant: error
+          message: Some fields need attention.
+responsive:
+  - breakpoint: mobile
+    changes:
+      - section: add-parent-form
+        action: stack
+  - breakpoint: tablet
+    changes:
+      - section: add-parent-form
+        action: stack

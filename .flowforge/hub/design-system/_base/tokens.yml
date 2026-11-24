@@ -1,0 +1,45 @@
+# =============================================================================
+# Design System — _base tokens
+# =============================================================================
+# The shared brand core. PRIMITIVES LIVE ONLY HERE — per-app themes reference
+# them and must not redefine them (brand-no-fork; `ie design-system check`
+# rejects a `primitives:` block in any per-app tokens.yml).
+#
+# Tiers:
+#   primitives — raw values (palette, type, scales). The single source.
+#   semantic   — meaning -> primitive, referenced by component trees by name.
+#                A semantic value dereferences in ONE hop: {primitives.<...>}.
+#
+# This is a NEUTRAL skeleton (no brand). Fill in real brand values, or seed it
+# from Figma / a generated design (P4).
+# =============================================================================
+
+version: 1
+layer: _base
+
+primitives:
+  color:
+    white:    "#FFFFFF"
+    black:    "#000000"
+    gray-50:  "#F9FAFB"
+    gray-100: "#F3F4F6"
+    gray-500: "#6B7280"
+    gray-900: "#111827"
+  font:
+    family-sans: "system-ui, sans-serif"
+  scale:
+    space:       { xs: "4px", sm: "8px", md: "16px", lg: "24px", xl: "40px" }
+    radius:      { sm: "4px", md: "8px", lg: "16px" }
+    font-size:   { body-sm: "14px", body-md: "16px", heading-md: "24px", heading-lg: "32px" }
+    font-weight: { regular: "400", medium: "500", bold: "700" }
+
+semantic:
+  color-surface:     "{primitives.color.white}"
+  color-surface-alt: "{primitives.color.gray-50}"
+  color-border:      "{primitives.color.gray-100}"
+  color-text:        "{primitives.color.gray-900}"
+  color-text-muted:  "{primitives.color.gray-500}"
+  spacing-sm:        "{primitives.scale.space.sm}"
+  spacing-md:        "{primitives.scale.space.md}"
+  spacing-lg:        "{primitives.scale.space.lg}"
+  radius-card:       "{primitives.scale.radius.md}"
